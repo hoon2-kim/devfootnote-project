@@ -1,0 +1,45 @@
+# Phase 0 gate를 로컬 수동 실행에만 의존하지 않기 위한 저장소 검사다.
+# registry push, cloud credential과 배포는 포함하지 않는다(ADR-0009/ADR-0010).
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+
+      # 생성 SDK가 현재 OpenAPI와 어긋나면 실패한다. 재생성 결과는 작업 트리에만 남는다.
+      - run: pnpm openapi:check
+
+      # Testcontainers가 runner의 Docker로 격리된 PostgreSQL을 만든다.
+      - run: pnpm test:integration
+
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:browser
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
