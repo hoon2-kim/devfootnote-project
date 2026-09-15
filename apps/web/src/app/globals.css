@@ -1,0 +1,38 @@
+@import 'tailwindcss';
+
+/* ADR-0006의 semantic token 중 현재 화면이 쓰는 것과, ADR-0006이 scaffold에서 값을 고정하라고
+   요구하는 상태 ramp만 둔다. text-placeholder·decoration-faint·action-pressed는 해당 control을
+   만들 때 추가한다. 상태 ramp 값은 tests/design.test.ts의 대비 검사를 통과한 값이다. */
+@theme {
+  --color-canvas: #f6f5f4;
+  --color-surface: #ffffff;
+  --color-text-primary: #000000;
+  --color-text-secondary: #31302e;
+  --color-text-muted: #615d59;
+  --color-border-subtle: #e6e6e6;
+  --color-action-primary: #0075de;
+  --color-focus: #0075de;
+  --color-status-error: #a12622;
+  --color-status-warning: #795000;
+  --color-status-success: #21633b;
+  --color-status-destructive: #a12622;
+
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* element selector는 여기서 끝낸다. 컴포넌트 스타일은 utility로 작성해
+   Tailwind preflight·shadcn 컴포넌트와 충돌하지 않게 한다. */
+@layer base {
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 4px;
+  }
+}
