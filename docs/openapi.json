@@ -1,0 +1,55 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health/live": {
+      "get": {
+        "operationId": "getLiveness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "프로세스 응답 가능"
+          },
+          "500": {
+            "description": "예상하지 못한 서버 오류"
+          }
+        },
+        "summary": "",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "operationId": "getReadiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "DB 연결 확인 성공"
+          },
+          "500": {
+            "description": "예상하지 못한 서버 오류"
+          },
+          "503": {
+            "description": "DB 연결 확인 실패 또는 timeout"
+          }
+        },
+        "summary": "",
+        "tags": [
+          "Health"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "devfootnote API",
+    "description": "",
+    "version": "0.0.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "schemas": {}
+  }
+}
