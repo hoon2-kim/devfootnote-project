@@ -1,0 +1,27 @@
+{
+  "name": "@devfootnote/api",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc-watch --onSuccess 'node --watch --env-file-if-exists=../../.env dist/main.js'",
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "openapi:generate": "node dist/openapi.js"
+  },
+  "dependencies": {
+    "@devfootnote/backend": "workspace:*",
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/platform-express": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "@nestjs/terminus": "catalog:",
+    "class-transformer": "catalog:",
+    "class-validator": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:"
+  },
+  "devDependencies": {
+    "tsc-watch": "7.2.0"
+  }
+}

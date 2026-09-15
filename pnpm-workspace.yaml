@@ -1,0 +1,51 @@
+packages:
+  - apps/*
+  - packages/*
+strictPeerDependencies: true
+saveExact: true
+
+# 루트 테스트와 각 workspace가 같은 물리 모듈을 쓰도록 공유 의존성의 버전을 한 곳에서 소유한다.
+# 여기 없는 의존성은 해당 package 하나만 사용한다.
+catalog:
+  '@nestjs/common': 12.0.2
+  '@nestjs/core': 12.0.2
+  '@nestjs/platform-express': 12.0.2
+  '@nestjs/swagger': 12.0.1
+  '@nestjs/terminus': 12.0.0
+  '@nestjs/testing': 12.0.2
+  '@types/node': 24.13.4
+  '@types/pg': 8.23.1
+  'class-transformer': 0.5.1
+  'class-validator': 0.15.1
+  'drizzle-kit': 0.31.10
+  'drizzle-orm': 0.45.2
+  pg: 8.23.0
+  pino: 10.3.1
+  'reflect-metadata': 0.2.2
+  rxjs: 7.8.2
+  typescript: 5.9.3
+
+# 공급망 사고 직후의 신규 publish를 바로 설치하지 않는다. 아래 목록은 이 정책 도입 시점에
+# 이미 검토하고 고정한 버전이라 대기 없이 허용한다.
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - '@nestjs/common@12.0.2'
+  - '@nestjs/core@12.0.2'
+  - '@nestjs/platform-express@12.0.2'
+  - '@nestjs/testing@12.0.2'
+  - '@turbo/darwin-64@2.10.13'
+  - '@turbo/darwin-arm64@2.10.13'
+  - '@turbo/linux-64@2.10.13'
+  - '@turbo/linux-arm64@2.10.13'
+  - '@turbo/windows-64@2.10.13'
+  - '@turbo/windows-arm64@2.10.13'
+  - turbo@2.10.13
+allowBuilds:
+  '@scarf/scarf': false
+  cpu-features: false
+  esbuild: true
+  protobufjs: true
+  ssh2: false
+  '@nestjs/core': false
+  sharp: true
+  unrs-resolver: true

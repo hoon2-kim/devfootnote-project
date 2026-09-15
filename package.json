@@ -1,0 +1,46 @@
+{
+  "name": "devfootnote",
+  "private": true,
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": "^24.20.0"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env node_modules/turbo/bin/turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck && tsc -p tsconfig.tests.json",
+    "lint": "eslint .",
+    "test": "pnpm build:api && vitest run --exclude '**/*.integration.test.ts'",
+    "test:integration": "pnpm build:api && vitest run tests/database.integration.test.ts",
+    "test:browser": "playwright test",
+    "build:backend": "pnpm --filter @devfootnote/backend build",
+    "build:api": "turbo run build --filter @devfootnote/api",
+    "openapi:generate": "pnpm build:api && pnpm --filter @devfootnote/api openapi:generate && pnpm --filter @devfootnote/api-client generate",
+    "openapi:check": "node scripts/check-generated.mjs",
+    "db:generate": "pnpm --filter @devfootnote/backend db:generate",
+    "db:migrate": "pnpm --filter @devfootnote/backend db:migrate"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/testing": "catalog:",
+    "@playwright/test": "1.63.0",
+    "@testcontainers/postgresql": "12.1.0",
+    "@types/express": "5.0.6",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "@types/supertest": "7.2.1",
+    "class-transformer": "catalog:",
+    "class-validator": "catalog:",
+    "drizzle-orm": "catalog:",
+    "eslint": "9.39.4",
+    "pg": "catalog:",
+    "reflect-metadata": "catalog:",
+    "supertest": "7.2.2",
+    "turbo": "2.10.13",
+    "typescript": "catalog:",
+    "typescript-eslint": "8.70.0",
+    "vitest": "4.0.18"
+  }
+}
