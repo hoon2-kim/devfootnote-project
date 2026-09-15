@@ -78,7 +78,7 @@ Codex와 Claude Code가 공유하는 저장소 작업 지침이다. 공통 규�
 
 명령의 소유자는 루트와 대상 package의 `package.json`이다. 현재 루트에 `pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:integration`, `pnpm test:browser`가 등록되어 있다. 실행 전에 연결된 파일·test discovery·의존성과 DB/Docker 사전 조건을 확인한다. Phase 0 구현 중에는 script가 먼저 생기고 대상 테스트·설정은 아직 없을 수 있으므로 등록 사실과 실행 가능·통과 여부를 구분한다.
 
-현재 실행 사전 조건과 명령별 범위는 [README의 검증 안내](README.md#검증)를 따르며 같은 순서를 [CI 워크플로](.github/workflows/ci.yml)가 실행한다. `pnpm openapi:check`는 재생성 후 drift를 확인하므로 생성 파일을 변경할 수 있다. `pnpm db:generate`와 `pnpm db:migrate`는 명시적 DB 변경 작업이다. 테스트 산출물은 `test-results/`에 쓰고 `docs/evidence/`는 덮어쓰지 않는다. [Phase 0 evidence](docs/evidence/phase0/README.md)는 해당 시점의 보존 기록이며, 계약 변경 뒤 현재 gate는 새 실행 결과로 판단한다.
+현재 실행 사전 조건과 명령별 범위는 [README의 검증 안내](README.md#검증)를 따르며 같은 순서를 [CI 워크플로](.github/workflows/ci.yml)가 실행한다. `pnpm openapi:check`는 재생성 후 drift를 확인하므로 생성 파일을 변경할 수 있다. `pnpm db:generate`와 `pnpm db:migrate`는 명시적 DB 변경 작업이다. 테스트 산출물은 `test-results/`에 쓰고, 별도 보존 기록은 Git에서 제외한 로컬 전용 `docs/evidence/`에 두며 테스트가 덮어쓰지 않는다. 공개 문서는 로컬 기록에 링크하지 않고 검증 요약·재현 명령을 안내한다. 테스트 코드·CI 설정은 버전 관리하며, 과거 기록과 구분해 현재 gate는 새 실행 결과로 판단한다.
 
 - **지금 가능한 조사:** `rg --files`, `rg -n '검색어' AGENTS.md docs`와 작업 관련 `git status`, `git diff` 같은 읽기 전용 탐색. 문서 변경은 링크 대상·typed reference와 의미 일관성을 확인하고 사용한 검사 방법을 보고한다.
 - **제품 검사:** 승인된 구현 또는 관련 진단 범위에서 실제 manifest·설정을 확인해 루트에서 해당 명령을 실행한다. 새 script 도입·변경 때 이 안내도 갱신하고, 임의의 전체 실행보다 현재 변경에 필요한 검사를 먼저 선택한다.

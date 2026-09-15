@@ -45,7 +45,7 @@ health는 [ADR-0009의 최소 HTTP/DB 확인 범위](adr/0009-verification-obser
 
 기동은 Nest 기본 로그와 작은 공통 설정·종료 hook·listen으로 구성한다. `configureApp`은 실제 서버·HTTP 테스트·OpenAPI 생성이 공유할 수 있다. 애플리케이션 오류는 backend에서 한 번 설정한 Pino logger를 직접 사용하고 안전한 고정 메시지로 비밀정보를 차단한다. 단순화는 라이브러리 제거가 아니라 직접 만든 주변 계층을 줄이는 것이다. 자체 `logEvent` 래퍼·허용 필드 registry·AsyncLocalStorage 요청 문맥·trace header는 선행 구현하지 않으며 OpenTelemetry·추적은 실제 비동기 처리·관측 요구가 생기는 Phase 2 이후에 필요한 범위만 도입한다.
 
-Gate: `ref:AC-09`, `ref:AC-11`의 현재 구현 subset DAG/API 경계를 `ref:V-09`로 증명한다. 다음 phase의 acceptance를 미리 작성·실패시키는 것은 Phase 0 완료 조건이 아니다. 최종 허용 graph에 아직 없는 worker·feature를 빈 placeholder로 만들지 않는다. [2026-09-15 보존 evidence](evidence/phase0/README.md)는 단순화 이전의 probe·로그·API 연결 화면 계약을 검증한 기록으로 현재 gate의 통과 근거가 아니며, 새 실행 결과로 판단한다. 과거의 다음 phase red-test 기록도 당시 증거로 보존하되 현재 필수 검사나 기능 구현 증거로 사용하지 않는다.
+Gate: `ref:AC-09`, `ref:AC-11`의 현재 구현 subset DAG/API 경계를 `ref:V-09`로 증명한다. 다음 phase의 acceptance를 미리 작성·실패시키는 것은 Phase 0 완료 조건이 아니다. 최종 허용 graph에 아직 없는 worker·feature를 빈 placeholder로 만들지 않는다. 로컬 전용 `docs/evidence/phase0/`의 2026-09-15 보존 기록은 단순화 이전의 probe·로그·API 연결 화면 계약을 검증한 기록으로 현재 gate의 통과 근거가 아니며, 새 실행 결과로 판단한다. 과거의 다음 phase red-test 기록도 당시 증거로 보존하되 현재 필수 검사나 기능 구현 증거로 사용하지 않는다.
 
 ### Phase 1 — 로그인부터 저장·keyword 검색·읽기까지
 
@@ -188,6 +188,7 @@ Gate: `ref:AC-13`을 `ref:V-13`으로 통과한 뒤 별도 승인에서만 ADR-0
 - Provider call은 DB transaction 밖에 있어야 하고, publication/charge는 post-call fenced transaction의 commit만 effect 증거다. BullMQ 완료나 in-memory state를 성공 근거로 사용하지 않는다.
 - 일반 JSON 성공은 ADR-0007의 success/data envelope를 한 번만 적용하고 API error는 실제 HTTP status와 success/error/message 계약으로 sanitize한다. 제품 mutation은 server-derived owner와 access JWT·CSRF 검사를 거친다. refresh/logout은 access 만료와 독립적인 ADR-0005의 refresh/CSRF 경계를 따른다. 사용자 입력으로 owner를 선택하지 않는다.
 - 각 phase 종료 때 `AC → V → evidence path` manifest, OpenAPI/client diff, migration state, regression과 unresolved failure를 검토한다. 실패 scenario나 수용 기준을 삭제·완화해 gate를 통과시키지 않는다.
+- 상세 실행 기록과 manifest는 Git에서 제외한 루트 기준 `docs/evidence/`에 로컬 전용으로 보관한다. 공개 문서에는 로컬 파일 링크 대신 검증 요약·재현 명령·한계를 남기며 테스트 코드와 CI 설정은 버전 관리한다. 기록의 비공개 보관은 검증 생략이나 gate 완화를 뜻하지 않는다.
 - Phase 0에서는 실제 앱 조립·DB 연결·HTTP 계약의 좁은 검사부터 연결한다. 이후 해당 기능을 구현할 때 관련 테스트와 CI gate를 추가하며 테스트 폴더·비율·coverage 수치를 채우기 위한 placeholder를 만들지 않는다. 임시 scaffold 검사와 지속할 회귀 검사의 구분, CI 환경 누락 처리와 AI 검토 기준은 [ADR-0009](adr/0009-verification-observability-and-search-evaluation.md#scaffold-검사의-수명)를 따른다.
 - AI가 테스트를 작성하거나 별도 에이전트가 리뷰했어도 실행 증거를 대신하지 않는다. 핵심 불변식과 기대 결과는 담당자가 원문 요구사항에 대조하고, 구현된 behavior·실제 검사·문서 계약이 일치해야 완료다.
 

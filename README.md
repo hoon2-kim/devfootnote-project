@@ -34,7 +34,7 @@ MVP는 소유자 한 명을 위한 서비스로 제한합니다. 로그인 이�
 
 현재 실행하면 `/login` 진입 화면을 확인할 수 있습니다. Google 로그인 버튼은 비활성화되어 있으며, 제품 데이터를 저장하는 테이블은 아직 없습니다. API 상태는 아래 health endpoint로 별도 확인합니다.
 
-기존 실행 결과는 [2026-09-15 Phase 0 검증 기록](docs/evidence/phase0/README.md)에 정리되어 있습니다. 이는 단순화 이전의 probe 응답·로그·임시 API 연결 화면에 대한 로컬 실행 기록입니다. 현재 계약의 통과 여부는 새 검사 결과로 판단하며, 과거 기록은 원격 CI·운영 환경이나 아직 구현하지 않은 기능의 검증을 뜻하지 않습니다.
+Phase 0에서는 빌드·타입·lint, HTTP 계약·패키지 경계·로그, 실제 PostgreSQL 통합과 로그인 진입 화면을 로컬에서 검증했습니다. 상세 실행 기록은 `docs/evidence/`에 로컬 전용으로 보관하며 GitHub에는 올리지 않습니다. 재현 명령과 검사 범위는 아래 [검증 안내](#검증)를 따릅니다. 현재 계약의 통과 여부는 새 실행 결과로 판단하며, 과거 기록은 원격 CI·운영 환경이나 아직 구현하지 않은 기능의 검증을 뜻하지 않습니다.
 
 ## 기술 스택
 
@@ -65,7 +65,7 @@ devfootnote/
 ├── tests/                   # HTTP·패키지 경계·DB 통합·브라우저 검증
 ├── scripts/                 # 생성물 drift 확인
 ├── .github/workflows/       # 저장소 검사(CI)
-├── docs/                    # 명세·계획·ADR·검증 기록
+├── docs/                    # 명세·계획·ADR (evidence는 로컬 전용)
 ├── docker-compose.yml       # 로컬 PostgreSQL
 └── turbo.json               # workspace 작업 순서·캐시 설정
 ```
@@ -143,7 +143,7 @@ Health 성공은 `{ success: true, data: { status: "ok" } }`, 오류는 일반 A
 
 DB 통합 테스트는 Docker가 필요하며 개발 DB 대신 별도 Testcontainers를 사용합니다. macOS에서 Docker socket을 찾지 못하면 현재 Docker context의 socket을 `DOCKER_HOST`로 지정합니다.
 
-브라우저 테스트 전에는 `pnpm exec playwright install chromium`과 `pnpm build`가 필요합니다. 현재 로그인 진입 화면 smoke는 별도 web `33000` 포트만 실행하며 API나 개발 서버를 재사용하지 않습니다. 실행 결과 JSON과 스크린샷은 `test-results/`에 남으며, `docs/evidence/`는 검증 시점에 의도적으로 보존한 기록이라 테스트가 덮어쓰지 않습니다. 이 화면 검사는 실제 Google 인증 검증과는 다릅니다.
+브라우저 테스트 전에는 `pnpm exec playwright install chromium`과 `pnpm build`가 필요합니다. 현재 로그인 진입 화면 smoke는 별도 web `33000` 포트만 실행하며 API나 개발 서버를 재사용하지 않습니다. 실행 결과 JSON과 스크린샷은 `test-results/`에 남습니다. 별도 보존할 기록은 로컬 전용 `docs/evidence/`에 두며 테스트가 덮어쓰지 않습니다. 두 경로 모두 Git에서 제외하므로 새로 clone한 저장소에 없어도 정상이고, 검사 실행에도 필요하지 않습니다. 테스트 코드와 CI 설정은 계속 버전 관리합니다. 이 화면 검사는 실제 Google 인증 검증과는 다릅니다.
 
 위 명령은 [CI 워크플로](.github/workflows/ci.yml)에서도 같은 순서로 실행합니다. CI는 registry push나 클라우드 자격 증명을 사용하지 않습니다.
 
@@ -160,5 +160,4 @@ README는 프로젝트의 입구이며, 상세 요구사항과 기술 결정은 
 - [개발 계획](docs/plan.md): 구현 순서와 단계별 검증
 - [ADR](docs/adr/): 아키텍처·인증·검색·AI·운영 관련 의사결정
 - [디자인 기준](DESIGN.md): 화면의 정보 위계와 시각 문법을 위한 참고 자료
-- [Phase 0 검증 기록](docs/evidence/phase0/README.md): 실행 환경, 검사 결과와 한계
 - [저장소 작업 지침](AGENTS.md): 코드 경계, YAGNI, 검증·Git 작업 규칙
