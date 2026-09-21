@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-12
-- Updated: 2026-09-14 — 로컬·CI 이미지 제작/검증과 AWS 운영 runtime·image delivery 결정을 구분; 비용·topology gate는 유지
+- Updated: 2026-09-16 — 다중 사용자 workload와 서비스 전체 월 비용 상한을 명시; topology gate 유지
 - Canonical owner: 배포 결정 유예, Phase-6 AWS 후보 worksheet, all-in cost와 복구 gate
 
 ## Context
@@ -15,7 +15,7 @@ AI provider/model/version/dimension 선택은 이 ADR이나 Phase 6의 책임이
 
 ## Decision Drivers
 
-1. 월 30,000원 상한을 credit나 빠진 network/backup 비용으로 거짓 통과시키지 않는다.
+1. 모든 사용자를 합산한 서비스 전체 월 30,000원 상한을 credit나 빠진 network/backup 비용으로 거짓 통과시키지 않는다.
 2. 같은 workload와 공식 source로 독립 reviewer 둘이 동일한 KRW 결과와 gate를 재현하게 한다.
 3. 실제 peak memory, storage, IO, traffic, restore 결과를 보고 가장 단순한 AWS 구성을 선택한다.
 4. Terraform은 학습 목적이라는 이유로 topology·운영 책임보다 먼저 만들지 않는다.
@@ -44,11 +44,11 @@ Terraform은 Phase 6에서 선택된 AWS architecture를 반복 생성·검토�
 
 동일한 versioned workload snapshot에 다음을 기록한 뒤에만 후보 비교를 시작한다.
 
-- web/API/worker의 steady와 peak RSS/CPU, startup time, image 또는 artifact size와 동시성
+- 활성 사용자 수·동시성과 web/API/worker의 steady와 peak RSS/CPU, startup time, image 또는 artifact size
 - PostgreSQL data/index/backup 크기, growth, connections, storage와 IO; Redis steady/peak memory, persistence와 no-eviction 요구
 - 1k/10k corpus의 indexing/search 측정, queue peak·steady load와 retry/repair volume
 - 월 request, ingress/egress와 inter-service transfer, IPv4, DNS, log/metric ingest와 보존량
-- 선택적 embedding/answer의 configured maximum calls/units와 observed retry/duplicate-window evidence
+- 모든 사용자의 선택적 embedding/answer를 합산한 configured maximum calls/units·비용 exposure와 observed retry/duplicate-window evidence
 - 후보별 peak에서 OS/runtime 여유를 포함한 memory margin과 database/cache capacity
 - backup 생성 및 격리된 restore rehearsal 결과, RPO/RTO proposal, migration-before-start와 rollback 절차
 - AI provider를 포함하는 후보라면 consent/retention/private-data processing 조건의 승인 evidence

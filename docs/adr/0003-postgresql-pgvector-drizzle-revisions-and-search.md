@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-12
-- Updated: 2026-09-15 — Drizzle ORM/Kit 선택을 확정하고 Nest 연결 수명주기·명시적 transaction·migration 실행 및 DB 오류 처리 기준을 보강; refresh JWT·revision 계약 유지
+- Updated: 2026-09-20 — OAuth 임시 상태 rename migration; refresh·revision·원자 저장 계약 유지
 - Canonical owner: 관계형 저장 표현, Drizzle schema/transaction과 SQL migration, revision과 keyword/vector 검색 불변식
 
 ## Context
@@ -27,7 +27,7 @@ SIGTERM 또는 Nest app close 시 새 요청·claim을 중단하고 진행 중 �
 
 ### 명시적 transaction과 조건부 갱신
 
-transaction은 application owner가 `db.transaction(async (tx) => ...)`로 경계를 소유한다. 원자 작업에 참여하는 persistence adapter와 transactional public port는 같은 scoped `tx`/connection으로 실행되게 명시적으로 연결한다. 이 경계 안에서 전역 `db`, `pool.query` 또는 별도 transaction으로 빠져나가지 않는다. DB·transaction 타입은 선택한 driver와 schema에서 추론하며 repository/query-builder handle을 public 결과로 노출하지 않는다. AsyncLocalStorage 기반 암묵 transaction, broad untyped cast, 시작 시 자동 migration과 network call을 포함한 transaction은 금지한다.
+transaction은 application owner가 `db.transaction(async (tx) => ...)`로 경계를 소유한다. 원자 작업에 참여하는 persistence adapter와 transactional public port는 같은 scoped `tx`/connection으로 실행되게 명시적으로 연결한다. 이 경계 안에서 전역 `db`, `pool.query` 또는 별도 transaction으로 빠져나가지 않는다. DB·transaction 타입은 선택한 driver와 schema에서 추론하며 repository/query-builder handle을 public 결과로 노출하지 않는다. 현재 CLS 기반 전파는 도입하지 않는다. 여러 저장소의 원자 협력이 실제로 필요할 때 scoped transaction/CLS를 결정한다. broad untyped cast, 시작 시 자동 migration과 network call을 포함한 transaction은 금지한다.
 
 입력 검증·결정적 chunking처럼 DB가 필요 없는 계산은 transaction 전에 수행하고, 최신 revision/권한·제약 확인은 transaction 안에서 다시 판정한다. 조건부 상태 전이는 predicate를 포함한 update와 `returning` 결과 또는 영향 행 수로 성공을 판정한다. 0건은 해당 업무 계약에 따라 stale/conflict/already-terminal 등으로 구분하며 무조건 성공으로 바꾸지 않는다. 원자 작업을 취소해야 하는 실패는 throw 또는 명시적 rollback으로 전파하고 callback 안에서 정상 return하여 앞선 쓰기가 부분 commit되지 않게 한다. pool timeout이나 deadlock을 숨기는 전역 자동 retry를 넣지 않고, retry가 필요하면 원자 작업 전체의 재실행 안전성과 한도를 해당 owner에서 검증한다.
 
@@ -39,13 +39,21 @@ transaction은 application owner가 `db.transaction(async (tx) => ...)`로 경�
 - 사용자 값은 parameter로 바인딩한다. 문자열 연결이나 `sql.raw`로 사용자 입력을 삽입하지 않고 동적 식별자는 고정 schema object 또는 서버 allowlist로 제한한다. `sql<T>`의 타입 표기는 runtime 검증·변환이 아니므로 실제 driver 반환값과 raw query 결과를 integration test로 확인한다.
 - HTTP/public 결과는 필요한 column만 선택해 업무 결과 계약으로 반환하고 DB row 전체를 그대로 노출하지 않는다. timestamp·numeric·vector 등 변환이 필요한 반환값은 목적별로 명시적으로 처리하며 타입 단언만으로 맞추지 않는다.
 - DB 오류는 해당 persistence 경계에서 안정적인 PostgreSQL 오류 code와 알려진 constraint를 기준으로 필요한 업무 오류로 변환한다. 모든 unique 위반을 같은 충돌로 취급하거나 원본 message 문자열을 파싱하지 않는다. Drizzle가 감싼 `cause`·SQL·parameter, PostgreSQL `detail`에는 원문·토큰 해시 등이 들어갈 수 있으므로 API 오류·운영 telemetry로 전달하지 않는다. 범용 ORM 오류 framework 대신 필요한 오류만 작은 함수로 분류한다.
+- 인증 저장소는 알려진 연결 장애·DB 기동/종료·연결 용량 부족·잠금 timeout/질의 취소 code만 unavailable로 분류한다. Drizzle의 직접 cause에서 code를 확인하되 원본 오류는 전달하지 않는다. schema 불일치·미분류 제약 위반·transaction 안의 토큰 발급 버그는 안전한 내부 오류로 바꾸며 일반 JSON endpoint에서는 500으로 처리한다. OAuth callback은 기존 일반 실패 redirect를 유지한다. 업무별 constraint 변환은 해당 CRUD 계약과 함께 추가하며 자동 재시도는 하지 않는다.
+
+### 현재 schema 배치와 전환 기준
+
+현재 `drizzle(pool)`은 select/query builder를 사용하며 런타임 통합 schema 객체와 `db.query.*`는 사용하지 않는다. Kit의 `src/**/*.schema.ts` glob은 DDL 수집일 뿐 런타임 relations를 제공하지 않는다. custom `0005`의 account FK·deferred current-revision FK와 `0006`의 검색 DDL은 SQL 이력이 소유하며 Kit snapshot만으로 이를 재현한다고 주장하지 않는다. 새 generate 결과는 실제 DB의 custom 제약·index와 대조하고 과거 SQL/metadata를 수정하지 않는다.
+
+worker가 같은 DB를 사용하거나, `db.query`가 필요하거나, 교차 feature FK가 3개를 초과하는 시점 중 먼저 도달한 시점에 schema 수집 방식을 재검토한다. worker 도입 시에는 **전체** schema·migration·Kit config·연결 팩토리를 `packages/db`로 이동하고 migration은 한 곳에서만 생성·적용한다. 이때 표현 가능한 FK는 `references()` 등으로 명시하되 기존 DB 제약과 snapshot을 비교한 후속 migration으로 정합성을 맞춘다. 이번 파일 이동에서는 기존 SQL·snapshot·journal의 내용과 적용 순서를 바꾸지 않는다.
 
 ### 저장 관계와 불변식
 
 최소 관계는 다음 의미를 보존한다. 실제 이름 변경은 가능하지만 owner와 unique/FK 의미는 바꿀 수 없다.
 
-- `accounts`: `identity` owner와 canonical `(issuer, subject)` identity
-- `auth_refresh_tokens`: `identity` 소유, `owner_id` unique, 현재 refresh JWT의 SHA-256 `token_hash`, 로그인부터 고정된 `expires_at`, `created_at`. 원문 JWT, idle/last-seen과 과거 token family를 저장하지 않는다.
+- `accounts`: `auth` 소유. `(issuer, subject)` unique로 Google 계정별 한 row를 유지하며 issuer는 서버의 고정 Google 표지, subject는 Google `profile.id`다. 전역 단일 계정 제약은 두지 않는다.
+- `auth_oauth_states`: `auth` 소유. 난수 state·browser binding의 hash, 5분 만료와 검증한 로그인 복귀 경로를 저장하고 callback에서 원자적으로 소모한다. 로그인 시도 이력·실패 횟수가 아니며 provider nonce·PKCE verifier·Google callback URL은 저장하지 않는다. `0008_rename_oauth_state.sql`이 기존 테이블·PK·만료 index 이름만 바꾸고 행을 보존한다.
+- `auth_refresh_tokens`: `auth` 소유, `owner_id` unique, 현재 refresh JWT의 SHA-256 `token_hash`, 로그인부터 고정된 `expires_at`, `created_at`. 원문 JWT, idle/last-seen과 과거 token family를 저장하지 않는다.
 - `materials`: owner, metadata, nullable deletion, `current_revision_id`
 - `material_revisions`: immutable revision number/content/context/source metadata와 content fingerprint
 - `material_chunks`: revision에 속한 안정적 ordinal, text와 source offsets
@@ -56,7 +64,9 @@ transaction은 application owner가 `db.transaction(async (tx) => ...)`로 경�
 
 모든 material/revision/chunk/receipt/intent 관계는 owner가 일치해야 한다. composite FK 또는 transaction 검사가 cross-owner association을 거부한다. material의 `current_revision_id`는 동일 material의 revision만 가리킨다. revision과 chunk는 감사·비교를 위해 update 때 보존하지만 current pointer에 도달하지 않는 과거 revision은 기본 읽기·검색 결과에 노출하지 않는다. delete는 material을 tombstone 처리하고 current 검색/읽기와 새 publication을 즉시 차단하며, 물리 삭제와 retention은 `usage-retention` 정책이 수행한다.
 
-`auth_refresh_tokens.owner_id`는 `accounts`를 참조하며 owner당 현재 refresh 한 개만 허용한다. refresh JWT 검증 뒤 기존 해시와 유효 만료를 조건으로 한 원자적 CAS가 정확히 한 요청에만 새 해시 교체를 허용한다. 회전은 `expires_at`과 최초 로그인 `created_at`을 연장하지 않고, 새 로그인은 두 시각과 해시를 새 로그인 기준으로 교체한다. logout은 검증된 owner의 현재 refresh row를 삭제한다. JWT 검증·cookie·logout 경쟁의 상세 계약은 [ADR-0005](0005-google-oidc-single-owner-and-sessions.md)를 따르며 다른 feature는 이 row를 직접 접근하지 않는다.
+`auth_refresh_tokens.owner_id`는 `accounts`를 참조하며 계정별 현재 refresh 한 개만 허용한다. refresh JWT 검증 뒤 기존 해시와 유효 만료를 조건으로 한 원자적 CAS가 정확히 한 요청에만 새 해시 교체를 허용한다. 회전은 `expires_at`과 최초 로그인 `created_at`을 연장하지 않고, 새 로그인은 해당 계정의 두 시각과 해시만 새 로그인 기준으로 교체한다. logout은 검증된 owner의 현재 refresh row만 삭제한다. JWT 검증·cookie·logout 경쟁의 상세 계약은 [ADR-0005](0005-google-login-and-sessions.md)를 따르며 다른 feature는 이 row를 직접 접근하지 않는다.
+
+기존 단일 계정 DB의 전환은 새 `0003_allow_multiple_accounts.sql`로 `singleton` column과 관련 unique/check 제약만 제거한다. 과거 migration은 수정하지 않고 account ID·Google 식별자·refresh row와 `(issuer, subject)` unique를 보존한다. 개발 DB 적용은 [README](../../README.md#실행-순서)에 따라 대상 확인 뒤 명시적으로 실행한다.
 
 ### 원자 save/update
 
@@ -65,13 +75,37 @@ transaction은 application owner가 `db.transaction(async (tx) => ...)`로 경�
 1. authenticated owner와 normalized request fingerprint를 만든다.
 2. 같은 `(owner_id, idempotency_key)` receipt가 있으면 fingerprint가 같을 때 기존 성공을 반환하고, 다르면 conflict로 거부한다.
 3. update는 material row를 잠그고 `expectedRevisionId`가 current와 같은지 CAS한다. create도 owner 범위에서 입력 불변식을 확인한다.
-4. immutable revision을 만들고 결정적 chunking 결과 전체와 revision-scoped keyword projection을 기록한다.
+4. update의 정규화한 내용 fingerprint가 현재 revision과 같으면 기존 ID/revision을 반환할 receipt만 기록하고 6단계로 간다. 다르면 immutable revision을 만들고 결정적 chunking 결과 전체와 revision-scoped keyword projection을 기록한다.
 5. material current pointer를 새 revision으로 바꾸고 request receipt 및 provider-agnostic immutable embedding intent를 기록한다.
 6. transaction commit 뒤에만 성공을 반환한다.
 
-어느 단계든 실패하면 모든 쓰기가 rollback된다. concurrent update 중 정확히 하나만 기대 revision CAS를 통과하며 loser는 새 current나 orphan visible projection을 만들지 않는다. save 성공은 PostgreSQL receipt/current pointer로 증명하며 enqueue 상태를 응답 조건으로 사용하지 않는다.
+어느 단계든 실패하면 모든 쓰기가 rollback된다. 같은 기대 revision에서 내용이 달라지는 concurrent update 중 정확히 하나만 새 revision을 확정하며 loser는 새 current나 orphan visible projection을 만들지 않는다. 변경 없는 update는 pointer를 바꾸지 않으므로 같은 현재 revision을 확인한 여러 요청이 성공할 수 있다. save 성공은 PostgreSQL receipt/current pointer로 증명하며 enqueue 상태를 응답 조건으로 사용하지 않는다.
+
+#### 변경 없는 수정 — Phase 1 후속
+
+기존 receipt 확인 → material row lock → receipt 재확인 → owner/미삭제·기대 revision 검증 → 현재 content fingerprint 비교 순서를 지킨다. 정규화된 title/body/note/context/sourceUrl이 모두 같은 경우 HTTP 200과 기존 `{ id, revisionId }`를 반환한다. revision 번호·`current_revision_id`·`updated_at`·chunk·keyword·embedding intent는 그대로이고 새 idempotency key의 receipt만 같은 tx에서 확정한다. 이후 현재 버전이 바뀌어도 그 receipt의 재전송 결과는 동일하다. 같은 key의 다른 입력은 계속 409이며 stale 새 요청을 변경 없음으로 성공 처리하지 않는다.
+
+비교에는 검색용 NFKC/소문자 텍스트가 아니라 `prepareMaterial`의 내용 fingerprint를 쓴다. 본문의 줄바꿈은 LF로 통일하고 선택 필드는 trim/빈 값 정규화를 적용하되 본문 공백·대소문자·전각 표기 변화는 실제 수정으로 남긴다. UI 버튼 비활성화에 의존하지 않으며 API/SDK 응답 필드·schema 변경은 없다. 프론트는 기존 수정 성공 흐름으로 상세를 재조회하고 편집을 닫는다. 실제 변경의 AI 재처리 재사용 여부는 Phase 2에서 별도로 결정한다.
 
 keyword projection은 한영 혼합 원문을 보존한 normalized text와 PostgreSQL full-text/trigram 연산을 사용한다. 정확한 tokenizer 확장은 frozen evaluation과 운영 가능성 근거 없이 추가하지 않는다. keyword 결과는 embedding 준비 여부와 무관하다.
+
+#### Phase 1 등록 구현 기준
+
+등록 slice는 본문을 최대 10,000자, 제목 200자, 개인 메모 2,000자, context 1,000자, source URL 2,048자로 제한한다. 본문은 공백만으로 저장할 수 없으며 PostgreSQL text가 수용하지 않는 NUL을 HTTP DTO에서 거부한다. 출처는 credentials 없는 http/https 주소다. 본문은 줄바꿈만 LF로 통일하고 들여쓰기·공백을 보존하며 선택 metadata는 양끝 공백과 빈 값을 정규화한다. 필드 순서가 고정된 정규화 내용의 SHA-256을 request/content fingerprint로 사용한다.
+
+초기 chunking은 원문을 1,200 UTF-16 code unit 이하로 분할하고 surrogate pair를 나누지 않는다. offset은 정규화 원문의 `[start, end)`이며 모든 조각을 연결하면 원문과 일치한다. keyword projection은 제목·원문·메모·context·출처의 NFKC/소문자 표현을 저장한다. 현재 keyword 검색은 full-text와 모든 토큰의 부분 문자열 조건을 OR로 결합하고 전문·trigram GIN index를 사용한다. index 존재만으로 사용 여부나 지연을 보장하지 않는다.
+
+검색 snippet은 body → note → context → title → sourceUrl 순서에서 실제로 일치한 토큰을 찾아 원문 위치로 환산한다. NFKC의 길이 변화와 결합 문자를 고려하고, 최대 240 UTF-16 code unit의 시작·끝에서 surrogate pair를 자르지 않는다. 정규화한 문자열이나 HTML이 아니라 원문 plain text를 반환한다. literal 일치가 없는 전문 검색 후보는 본문 앞부분을 미리보기로 사용한다.
+
+`0009_stored_search_vector.sql`은 `material_keywords.search_vector`를 `to_tsvector('simple', normalized_text)`의 stored generated column으로 추가한다. FTS 조건과 `ts_rank_cd`는 이 컬럼을 사용하며 기존 표현식 GIN은 새 컬럼 GIN으로 대체한다. trigram GIN, 모든 토큰의 부분 문자열 조건, `similarity()`와 점수/updatedAt/id 정렬은 유지한다. 조회 때 반복하던 토큰화를 쓰기 시점으로 옮기는 것으로, current-search projection이나 검색 의미 변경이 아니다. 생성 컬럼은 같은 저장 transaction에서 자동 계산되고 기존 행도 migration에서 채워진다. Drizzle schema·SQL·snapshot을 함께 관리하며 과거 migration은 수정하지 않는다.
+
+기존 행의 vector 계산과 index 생성은 쓰기 비용·저장 공간을 늘리고 DDL 잠금을 요구한다. 개발 DB도 대상 확인 후 API를 멈추고 명시 migration을 적용한 뒤 새 API를 시작한다. 이 변경을 운영 무중단 migration으로 주장하지 않는다. 적용 전에는 새 API의 검색을 실행하지 않으며, 자동 startup migration이나 DB push는 사용하지 않는다.
+
+snippet 위치 변환은 grapheme 전체 배열 대신 `Intl.Segmenter.containing()`으로 이분 탐색 지점의 경계만 조회한다. 각 prefix에 NFKC와 소문자 변환을 함께 적용해 길이 변화의 기존 의미를 유지한다. 선형 순회마다 prefix 전체를 변환하거나 NFKC 변화 여부만으로 원문 offset과 동일하다고 가정하지 않는다.
+
+추가 한 행을 조회해 `hasNext`를 판정하는 것은 Repository 내부 구현이다. 목록·검색 후보의 공통 반환 계약은 `PageResult<T> { items, hasNext }`이며 소비자가 배열 길이로 다음 페이지를 추측하지 않는다. 현재 OFFSET와 기존 HTTP page 계약을 유지한다. 검색 점수 기반 정렬을 목록의 `(updated_at, id)` cursor만으로 대체하지 않는다.
+
+동시 등록은 receipt의 `(owner_id, idempotency_key)` 제약으로 판정한다. 승자의 receipt가 확정되면 패자는 자신의 쓰기를 모두 rollback한 뒤 승자 receipt를 한 번 조회한다. 이는 일반 DB 재시도가 아니다. 목록은 `updated_at DESC, id DESC`로 페이지당 기본 20개·최대 50개를 읽는다. 생성 DDL은 `0004_materials.sql`, runtime feature import 없이 연결하는 account FK와 같은 owner/material의 current revision을 강제하는 deferred composite FK는 custom `0005_materials_relational_fences.sql`이 소유한다. Kit snapshot에 표현되지 않는 두 custom FK는 실제 DB 제약 검사로 유지한다.
 
 ### pgvector publication과 검색
 
@@ -92,7 +126,7 @@ hybrid 검색은 keyword와 vector 후보를 안정적 chunk identity로 dedupe�
 
 ### Migration
 
-migration은 `packages/backend/src/infrastructure/database/migrations`의 단일 ordered SQL stream으로 관리한다. `packages/backend/drizzle.config.ts`가 현재 feature-private `*.schema.ts`를 DDL 입력으로 수집하고 같은 output 경로를 사용한다. schema 파일은 table metadata만 정의하고 Nest bootstrap·pool 생성·환경 secret 검증을 실행하지 않는다. 타입 검사·앱 build와 migration 생성은 DB 연결 없이 가능해야 하며, migration 생성은 앱 build의 부수 효과가 아닌 명시적인 변경 작업이다. 제품 구현 승인 뒤 다음 도구 흐름을 실제 package script로 연결한다. 현재 문서 전환에서는 schema/config/migration 파일을 생성하거나 명령을 실행하지 않는다.
+migration은 `apps/api/drizzle`의 단일 ordered SQL stream으로 관리한다. `apps/api/drizzle.config.ts`가 현재 feature-private `*.schema.ts`를 DDL 입력으로 수집하고 같은 output 경로를 사용한다. schema 파일은 table metadata만 정의하고 Nest bootstrap·pool 생성·환경 secret 검증을 실행하지 않는다. 타입 검사·앱 build와 migration 생성은 DB 연결 없이 가능해야 하며, migration 생성은 앱 build의 부수 효과가 아닌 명시적인 변경 작업이다. 제품 구현 승인 뒤 다음 도구 흐름을 실제 package script로 연결한다. 현재 문서 전환에서는 schema/config/migration 파일을 생성하거나 명령을 실행하지 않는다.
 
 1. backend 내부 Drizzle schema에서 현재 phase에 필요한 table, column, FK/unique/index를 정의한다.
 2. `drizzle-kit generate`로 SQL migration과 관련 metadata를 생성한다. pgvector extension 설치, 지원되지 않는 DDL과 data backfill은 필요할 때 `generate --custom`으로 같은 stream의 명시적인 SQL migration에 추가한다.

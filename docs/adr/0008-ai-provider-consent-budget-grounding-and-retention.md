@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-12
-- Updated: 2026-09-13 — answer admission의 인증 입력을 검증된 access JWT owner로 정렬; AI 동의·게시·정산 계약은 유지
+- Updated: 2026-09-16 — 사용자별 동의·예약 격리와 다중 사용자 환경의 서비스 전체 비용 gate 명시
 - Canonical owner: 외부 AI 호출 admission, 답변 choreography, 비용 정산, citation과 AI 데이터 보존
 
 ## Context
@@ -38,9 +38,9 @@ provider adapter는 domain entity, repository 또는 transaction handle을 받�
 
 ### 예산
 
-`usage-retention`은 configuration별 월/기간 비용 한도와 reservation ledger를 소유한다. budget 계산은 settled usage와 아직 만료되지 않은 reservation의 보수적 최대 비용을 포함한다. 단순 client counter나 provider dashboard는 admission authority가 아니다.
+`usage-retention`은 configuration별 월/기간 비용 한도와 reservation ledger를 소유한다. 사용자별 동의·예약을 유지하되 사용자 수만큼 서비스 예산이 늘어난다고 가정하지 않는다. 첫 실제 AI 호출 gate에서 서비스 전체 비용 상한과 집계·admission 범위를 확정하며 현재 인증 변경에 별도 전역 quota 플랫폼을 추가하지 않는다. budget 계산은 settled usage와 아직 만료되지 않은 reservation의 보수적 최대 비용을 포함한다. 단순 client counter나 provider dashboard는 admission authority가 아니다.
 
-예약은 `reservationId`, owner, purpose, request fingerprint, consent epoch, pricing snapshot/version, reserved maximum, currency/base unit, `expiresAt`, 상태(`reserved|settled|released|expired`)를 갖는다. 동일 request fingerprint/idempotency key의 반복은 기존 예약을 반환하거나 하나만 만들며, unique constraint와 transaction으로 `spent + active reservations + requestedMax <= configuredBudget`를 보장한다. 예산 부족, 미동의, 가격 정보 없음은 provider 호출 전에 종료하므로 provider call count는 0이다.
+예약은 `reservationId`, owner, purpose, request fingerprint, consent epoch, pricing snapshot/version, reserved maximum, currency/base unit, `expiresAt`, 상태(`reserved|settled|released|expired`)를 갖는다. 동일 owner·purpose·request identity의 fingerprint/idempotency key 반복은 기존 예약을 반환하거나 하나만 만들며 다른 사용자의 예약과 합치지 않는다. unique constraint와 transaction으로 `spent + active reservations + requestedMax <= configuredBudget`를 보장한다. 예산 부족, 미동의, 가격 정보 없음은 provider 호출 전에 종료하므로 provider call count는 0이다.
 
 정산은 provider의 검증 가능한 usage를 pricing snapshot에 적용하되 reservation 상한 초과 정책을 사전에 고정한다. 신뢰 가능한 usage가 없으면 예약 상한을 정산하는 보수적 정책 또는 실패 처리 중 하나를 provider 도입 ADR에서 선택해야 한다. credit/free tier는 budget 여유로 간주하지 않는다. duplicate settlement는 reservation identity의 unique terminal transition으로 비용을 한 번만 반영한다.
 
@@ -60,7 +60,7 @@ REQUESTED -> RESERVED -> RUNNING -> PUBLISHED | NO_ANSWER | FAILED | EXPIRED | I
 
 짧은 application-owned transaction에서 다음을 모두 성공시키거나 모두 실패시킨다.
 
-1. access JWT로 검증한 owner와 명시적 answer command/idempotency를 검증한다. 다른 feature의 identity 저장소에 접근하거나 provider 호출 중 refresh 상태를 재검사하지 않는다.
+1. access JWT로 검증한 owner와 명시적 answer command/idempotency를 검증한다. `auth`의 private 저장소에 접근하거나 provider 호출 중 refresh 상태를 재검사하지 않는다.
 2. 현재 material/revision, 삭제 여부, indexing readiness와 search filter를 통해 evidence chunk를 선택한다.
 3. evidence ID, material ID, revision ID, immutable content hash와 인용 가능한 locator의 snapshot을 answer request에 저장한다.
 4. current consent epoch를 확인한다.
@@ -130,7 +130,7 @@ answer request의 logical identity는 authenticated owner, client request ID와 
 
 ### Telemetry exclusion
 
-log, trace, metric, error reporting과 durable debug artifact에는 사용자 원문/메모/chunk, search query, prompt, answer text, citation excerpt, raw provider request/response, provider nested error body, cookie, token, OIDC claim, API key와 secret을 기록하지 않는다. metric label에는 owner/material/request/provider request ID를 넣지 않는다. bounded 값인 component, purpose, outcome, error class, model/pricing config version, retry count와 금액 bucket만 허용한다. correlation이 필요하면 별도 telemetry key로 만든 environment-scoped pseudonym을 structured log/trace에만 사용한다.
+log, trace, metric, error reporting과 durable debug artifact에는 사용자 원문/메모/chunk, search query, prompt, answer text, citation excerpt, raw provider request/response, provider nested error body, cookie, token, Google profile·JWT claim, API key와 secret을 기록하지 않는다. metric label에는 owner/material/request/provider request ID를 넣지 않는다. bounded 값인 component, purpose, outcome, error class, model/pricing config version, retry count와 금액 bucket만 허용한다. correlation이 필요하면 별도 telemetry key로 만든 environment-scoped pseudonym을 structured log/trace에만 사용한다.
 
 ## Considered Options
 
@@ -153,4 +153,4 @@ log, trace, metric, error reporting과 durable debug artifact에는 사용자 �
 
 ## Revisit triggers
 
-provider/model 도입, 법적 보존 조건 변경, multi-owner 또는 billing 도입, 혹은 PostgreSQL 단일 transaction으로 public ports를 조합할 수 없는 topology가 승인될 때 재검토한다.
+provider/model 도입, 법적 보존 조건 변경, 팀·공유·역할 또는 billing 도입, 혹은 PostgreSQL 단일 transaction으로 public ports를 조합할 수 없는 topology가 승인될 때 재검토한다.

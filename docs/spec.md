@@ -2,15 +2,15 @@
 
 ## 1. 문서 지위와 제품 목표
 
-이 문서는 devfootnote의 canonical 제품 요구사항과 수용 기준을 소유한다. 구현 순서와 검증 선언은 [`plan.md`](plan.md), 기술 결정은 아래의 [ADR 기준선](#10-adr-기준선), 시각 설계의 원본 입력은 루트 [`DESIGN.md`](../DESIGN.md)가 소유한다. 현재 저장소는 Phase 0 scaffold 구현 중이며 제품 완성·검증 통과 또는 배포를 주장하지 않는다. 문서 전환 당시의 작업 경계는 아래에 보존하되 현재 작업 권한과 구현 상태는 최신 사용자 요청·plan·실제 검사 결과로 구분한다.
+이 문서는 devfootnote의 canonical 제품 요구사항과 수용 기준을 소유한다. 구현 순서와 검증 선언은 [`plan.md`](plan.md), 기술 결정은 아래의 [ADR 기준선](#10-adr-기준선), 시각 설계의 원본 입력은 루트 [`DESIGN.md`](../DESIGN.md)가 소유한다. Phase 1의 인증·자료 CRUD·keyword 검색은 구현했으며 검증 범위와 결과는 plan을 따른다. 후속 AI 기능과 배포는 미완료다. 문서 전환 당시의 작업 경계는 아래에 보존하되 현재 작업 권한과 구현 상태는 최신 사용자 요청·plan·실제 검사 결과로 구분한다.
 
-devfootnote는 개발 중 저장한 기술 메모와 근거 본문을 기억나는 한국어·영어·식별자 단서로 다시 찾고, 개인 메모와 저장 원문을 분리해 읽으며, 사용자가 명시적으로 요청할 때만 저장 근거에 제한된 답변을 제공하는 단일 소유자용 웹 제품이다.
+devfootnote는 개발 중 저장한 기술 메모와 근거 본문을 기억나는 한국어·영어·식별자 단서로 다시 찾고, 개인 메모와 저장 원문을 분리해 읽으며, 사용자가 명시적으로 요청할 때만 저장 근거에 제한된 답변을 제공하는 사용자별 개인 자료함이다.
 
-역사적 교체 추적은 이것 하나뿐이다: `integration:github-oauth` → `integration:google-oauth`. 현재 인증 계약은 Google OIDC이며 이전 인증 통합은 현재 기능이나 의존성이 아니다.
+역사적 교체 추적은 이것 하나뿐이다: `integration:github-oauth` → `integration:google-oauth`. 현재 인증 계약은 Passport Google OAuth이며 이전 인증 통합은 현재 기능이나 의존성이 아니다.
 
 ## 2. 사용자, 진입점과 정확히 세 화면
 
-Production 사용자는 배포 설정의 Google OIDC `(iss, sub)`와 정확히 일치하는 소유자 한 명뿐이다. `/login`은 제품 화면이 아닌 로그인 진입점이다. 인증 뒤 제품 화면은 다음 **정확히 세 개**다.
+Google 인증에 성공한 누구나 첫 로그인에 계정을 만들고 자신의 자료함을 사용한다. owner는 서버가 검증한 Google `profile.id`에 연결된 내부 account ID이며 자료·검색·답변·사용량의 사용자 격리 기준이다. Phase 1의 자료·keyword 검색 격리는 구현했으며 답변·사용량은 후속 phase에 적용한다. `/login`은 제품 화면이 아닌 로그인 진입점이다. 인증 뒤 제품 화면은 다음 **정확히 세 개**다.
 
 | 화면 | 책임 | 필수 상태 |
 |---|---|---|
@@ -26,7 +26,7 @@ Production 사용자는 배포 설정의 Google OIDC `(iss, sub)`와 정확히 �
 
 | ID | 선언 | 결정 소유자 |
 |---|---|---|
-| `F-01` | 서버는 표준 Google OIDC Authorization Code+PKCE 흐름을 검증하고, configured production `(iss, sub)` 한 쌍에만 서비스 access/refresh JWT를 발급한다. Strategy/Guard로 access를 검증하고 PostgreSQL의 현재 refresh hash로 원자적 재발급·로그아웃을 처리한다. | [ADR-0005](adr/0005-google-oidc-single-owner-and-sessions.md) |
+| `F-01` | 서버는 Passport Google OAuth의 code 교환·profile 조회와 state를 검증하고, Google `profile.id`에 연결된 계정을 재사용하거나 첫 로그인에 생성한 뒤 서비스 access/refresh JWT를 발급한다. Strategy/Guard로 access를 검증하고 PostgreSQL의 계정별 현재 refresh hash로 원자적 재발급·로그아웃을 처리한다. | [ADR-0005](adr/0005-google-login-and-sessions.md) |
 | `F-02` | 소유자는 본문과 선택적 제목·개인 메모·source URL·context를 idempotent하게 생성·수정·삭제한다. 저장 성공은 material, immutable revision, chunks, keyword projection, idempotency와 embedding intent를 함께 확정한 PostgreSQL commit이다. | [ADR-0003](adr/0003-postgresql-pgvector-drizzle-revisions-and-search.md) |
 | `F-03` | 저장 직후 현재 소유자·현재 revision·미삭제 자료를 keyword로 검색하고, 메모·원문·출처·근거 구간을 구분해 읽는다. | [ADR-0003](adr/0003-postgresql-pgvector-drizzle-revisions-and-search.md) |
 | `F-04` | commit 뒤 비동기 embedding을 lease와 revision fence로 게시한다. AI 설정·동의 전 저장된 현재 자료도 기존 화면의 명시적 활성화·재시도로 새 indexing work를 만들 수 있고, 준비된 현재 자료만 vector/hybrid 검색에 포함하며 불가할 때 이유가 있는 keyword fallback을 제공한다. | [ADR-0004](adr/0004-bullmq-embedding-delivery-retry-and-fencing.md) |
@@ -41,7 +41,7 @@ Production 사용자는 배포 설정의 Google OIDC `(iss, sub)`와 정확히 �
 ### 자료와 revision
 
 - `Material`은 `ACTIVE → DELETED`로만 삭제 전이하며 삭제된 자료는 즉시 읽기·검색·답변 근거에서 제외된다.
-- 모든 수정은 immutable `Revision`을 추가하고 material의 current revision pointer를 기대 revision CAS로 바꾼다. stale 수정은 충돌이며 기존 입력을 보존한다.
+- 정규화한 저장 내용이 바뀐 수정은 immutable `Revision`을 추가하고 material의 current revision pointer를 기대 revision CAS로 바꾼다. 오타·메모 등 작은 변경도 새 버전이다. 변경 없는 수정은 owner·미삭제·기대 revision을 확인한 뒤 기존 ID/revision을 반환하고 receipt만 저장하며 수정 시각·파생 데이터를 바꾸지 않는다. stale 수정은 내용이 같아도 충돌이며 기존 입력을 보존한다. 이미 확정된 같은 요청의 재전송은 아래 멱등성 계약을 따른다.
 - idempotency key와 canonical input fingerprint가 같으면 같은 결과를 반환하고, 같은 key의 다른 입력은 충돌한다. 동시 생성·수정은 DB constraint와 transaction으로 한 효과만 남긴다.
 - 현재 revision의 원문, chunks, keyword projection과 durable embedding intent는 한 transaction에서 all-or-none이다. 저장 응답은 Redis 또는 embedding을 기다리지 않는다.
 
@@ -67,14 +67,14 @@ Production 사용자는 배포 설정의 Google OIDC `(iss, sub)`와 정확히 �
 
 | Entity 또는 전이 | 단일 소유 module | 허용된 공개 경계 |
 |---|---|---|
-| OIDC admission, account, access/refresh JWT 발급·검증, refresh 교체·철회 | `identity` | identity command/query ports |
+| Google 계정 등록·로그인, account, access/refresh JWT 발급·검증, refresh 교체·철회 | `auth` | auth command/query ports |
 | material, revision, chunk, keyword, idempotency, embedding intent의 save transaction | `materials` | Save/Update/Delete/Read ports |
 | delivery, lease, attempt, retry/final/repair, embedding publication | `indexing` | intent delivery/publication ports |
 | keyword/vector/hybrid query와 dedupe | `search` | owner-scoped Search port |
 | answer request, snapshot, citation, answer lifecycle | `answers` | pre-call/post-call answer ports |
 | consent, budget reservation/settlement, usage와 retention | `usage-retention` | consent/reservation/settlement/deletion ports |
 
-`apps/api`와 `apps/worker`는 composition, transport와 lifecycle만 소유한다. 업무 규칙과 transaction은 `packages/backend`의 feature별 Module·Service·Repository로 구성하는 간단한 모듈러 모놀리스에 둔다. 여기서 public port는 이름 있는 업무 호출 계약이며 공개 Nest Module과 Service 메서드로 구현할 수 있다. 모든 기능에 interface·UseCase 계층을 강제하지 않으며 외부 AI 등 실제 실패 격리 경계만 좁은 port로 분리한다. 다른 module의 private repository나 schema에 접근하지 않는 소유권·DAG 계약은 유지한다. 저장 machinery, queue adapter와 provider adapter는 정책이나 도메인 전이를 소유하지 않는다. consumer·scheduler 등록은 worker 전용이며 공유 Module을 가져오는 것만으로 API에서 기동되지 않는다.
+현재 백엔드 업무·HTTP·저장은 `apps/api/src/modules`에서 기능별로 소유한다. auth/search/health는 레이어드, materials는 라이트 헥사고날이다. Controller는 HTTP, Service는 업무, Repository는 원자 저장을 맡고 다른 기능은 공개 index만 사용한다. packages는 생성 API client처럼 독립 계약이나 실제 공유가 필요한 경우에만 사용한다. worker의 DB 공유·등록 경계는 ADR-0001, 업무 소유권은 ADR-0002, HTTP 응답은 ADR-0007을 따른다.
 
 ## 6. 장애와 성능 저하 계약
 
@@ -92,17 +92,17 @@ Production 사용자는 배포 설정의 Google OIDC `(iss, sub)`와 정확히 �
 
 이 절은 `ref:F-01`과 `ref:F-06`의 경계다.
 
-- 유지보수되는 standards client가 discovery/JWKS, signature, exact issuer, audience, 시간, state, nonce, PKCE와 exact callback allowlist를 서버에서 검증하고 code를 서버에서 교환한다.
-- protocol·callback·configured tuple 검증이 끝나기 전 account/서비스 refresh write와 서비스 JWT 발급은 0건이다. email, hosted domain, display name, client-provided owner 또는 first-caller bootstrap은 admission 근거가 아니다.
+- `passport-google-oauth20`의 Strategy/Guard가 고정 callback에서 code를 서버 교환하고 Google profile을 조회한다. OAuth state는 난수·브라우저 binding·5분 TTL·DB 원자 소모로 보호하며 별도 인증 provider·session 서버는 두지 않는다. `auth_oauth_states`는 이 왕복을 위한 임시 상태이며 로그인 이력·실패 횟수·계정 잠금 기능이 아니다.
+- state·callback·Google 서버 profile 확인 전 account/서비스 refresh write와 서비스 JWT 발급은 0건이다. 계정은 서버가 조회한 `profile.id`로 식별하며 email·hosted domain·display name·client-provided owner로 연결하거나 최초 방문자에게 전역 소유권을 부여하지 않는다.
 - Google provider access/refresh/ID token은 browser나 장기 저장소에 보존하지 않는다. 성공 callback은 pre-auth identifier를 폐기하고 서비스 access JWT(15분)와 refresh JWT(로그인부터 7일 고정)를 HttpOnly cookie로 발급한다. 두 종류의 JWT는 signing key·용도와 검증 경로를 분리한다.
 - 현재 refresh는 owner당 PostgreSQL hash 한 건으로 관리한다. 재발급은 만료·현재 hash를 조건으로 원자 교체하고 access 만료와 독립적으로 동작한다. 새 로그인 또는 logout은 기존 refresh를 무효화하지만 기존 access JWT는 최대 잔여 15분 동안 유효하다. 즉시 access 철회·매 요청 세션 DB 조회·idle touch·인증용 Redis·장치 관리는 범위에 넣지 않는다.
-- 서비스 cookie는 HTTPS 전용 `Secure`, `HttpOnly`, `SameSite=Lax`, 좁은 `Path`와 no `Domain`을 사용한다. cookie clear, exact Origin+custom header 기반 mutation CSRF를 적용하고 state-changing GET을 금지한다. token을 URL·JS storage·JSON 응답에 노출하지 않는다. 구체 endpoint·cookie·rotation 실패 계약은 ADR-0005를 따른다.
-- production에는 test identity나 login bypass가 없다. A/B owner isolation은 production admission과 분리된 test runtime에서 검증한다.
+- 서비스 cookie는 HTTPS 전용 `Secure`, `HttpOnly`, `SameSite=Lax`, 좁은 `Path`와 no `Domain`을 사용한다. unsafe 요청은 exact Origin과 `csrf-csrf`의 서명된 double-submit token을 `X-CSRF-Token`으로 검증한다. 공개 `GET /api/v1/auth/csrf`는 CSRF token만 JSON으로 반환하며 인증 JWT는 URL·JS storage·JSON에 노출하지 않는다. CSRF binding의 로그인 갱신·refresh 유지·logout 삭제와 OAuth state 구분은 ADR-0005를 따른다. 제품 변경은 GET으로 수행하지 않는다.
+- production에는 test identity나 login bypass가 없다. 서로 다른 Google 계정은 서로 다른 owner이며 A/B owner isolation은 검증된 계정에 대응하는 test fixture로 확인한다.
 - secrets, cookie/token/hash, 사용자 원문·메모·질문, prompt/answer, raw provider response와 source URL query를 telemetry에 기록하지 않는다. correlation과 metric label은 bounded pseudonym만 사용한다.
 
 ## 8. 디자인과 접근성
 
-이 절은 `ref:F-07`의 화면 계약이다. [`DESIGN.md`](../DESIGN.md)의 `Notion Analysis`에서 정보 위계와 warm paper/white surface, typography, spacing, restrained radius/elevation, navigation/card/input/modal/empty/toast 문법만 적용한다. 글꼴은 **Inter**다. Notion 이름·logo·product copy·이미지·sticker·고유 asset·`NotionInter`를 복사하거나 사칭하지 않는다.
+이 절은 `ref:F-07`의 화면 계약이다. [`DESIGN.md`](../DESIGN.md)의 `Notion Analysis`에서 정보 위계와 warm paper/white surface, typography, spacing, restrained radius/elevation, navigation/card/input/modal/empty/toast 문법만 적용한다. 제품 본문의 기본 글꼴은 **Inter**다. 2026-09-20 사용자 요청에 따라 로그인·자료함 제목·공통 브랜드에는 **고운바탕**을 사용하고 로그인·자료함·인증 헤더는 종이색·올리브 팔레트로 변경한다. 상세 범위는 [ADR-0006의 디자인 전환](adr/0006-frontend-information-architecture-and-design.md#로그인-디자인-전환--2026-09-20)을 우선하며, 아래 색상 기준은 이 예외를 제외한 제품 화면에 적용한다. 자료함은 목록 우선이며 등록은 같은 화면의 작성 패널을 펼쳐 진행한다. Notion 이름·logo·product copy·이미지·sticker·고유 asset·`NotionInter`를 복사하거나 사칭하지 않는다.
 
 - canvas `#f6f5f4`, surface `#ffffff`, near-black/warm-gray text, hairline `#e6e6e6`, 8px-derived spacing을 사용한다.
 - `#0075de`는 유일한 primary/action/link/focus accent, `#005bab`는 pressed다. error/warning/success/destructive는 별도 semantic token과 text/icon/ARIA를 함께 쓴다.
@@ -115,13 +115,13 @@ Production 사용자는 배포 설정의 Google OIDC `(iss, sub)`와 정확히 �
 - **Workspace/runtime:** pnpm, Turborepo(Phase 0부터 최소 task 구성), Node.js LTS, strict TypeScript; 원격 cache는 초기 범위 아님
 - **Local development / images:** 루트 `docker-compose.yml`로 PostgreSQL+pgvector를 실행하고 Phase 2부터 Redis를 추가한다. 평소 web/API/worker는 호스트의 pnpm·Turbo 개발 script로 실행한다. 별도 `app` profile은 각 앱 Dockerfile로 빌드한 runtime image의 전체 실행·smoke 검증에 사용하며 자동화된 DB·큐 통합 테스트는 별도 Testcontainers로 격리한다. 이미지·네트워크·데이터 보존 기준은 ADR-0001/0009를 따른다.
 - **Frontend:** Next.js App Router, React, Tailwind CSS, shadcn/ui와 Radix, TanStack Query, React Hook Form과 Zod, `react-markdown`과 `rehype-sanitize`, Lucide
-- **Backend/data/async:** NestJS modular monolith, PostgreSQL+pgvector, `pg`+`drizzle-orm/node-postgres`, `drizzle-kit` SQL migrations, Redis+BullMQ
-- **Auth:** 표준 Google OIDC client, `@nestjs/passport`+`passport`+`passport-jwt`, `@nestjs/jwt`; access/refresh 모두 JWT
+- **Backend/data/async:** NestJS modular monolith, class-validator HTTP DTO, Zod 설정·검증된 JWT payload schema, PostgreSQL+pgvector, `pg`+`drizzle-orm/node-postgres`, `drizzle-kit` SQL migrations, Redis+BullMQ
+- **Auth:** `passport-google-oauth20`, `@nestjs/passport`+`passport`+`passport-jwt`, `@nestjs/jwt`; access/refresh 모두 JWT, `csrf-csrf`·cookie-parser의 signed double-submit CSRF
 - **Contract:** Swagger, 공통 성공 `{ success: true, data }`·오류 `{ success: false, error, message }` JSON, checked-in OpenAPI, `@hey-api/openapi-ts` generated client; 세부 예외·검증 오류는 ADR-0007
 - **Verification:** Vitest, React Testing Library, MSW, Supertest, Testcontainers, Playwright
 - **Operations:** Nest 기본 기동 로그, 공유 Pino logger, 단순 liveness 응답과 Terminus 기본 API의 DB readiness. 커스텀 로그·probe 계층을 선행 구현하지 않으며 OpenTelemetry·요청 추적은 Phase 2 이후 실제 비동기 처리·운영 관측에 필요한 범위부터 도입한다.
 
-Monorepo target은 `apps/web`, `apps/api`, `apps/worker`, `packages/backend`, `packages/api-client`부터 필요한 만큼만 만든다. 전체 목표 폴더 구조는 ADR-0001이 소유한다. API는 `src/auth`, `src/materials`, `src/search`, `src/answers`의 기능별 Controller·DTO와 `src/common`, `src/health`로 구성하고 모든 transport를 별도 `http` 폴더 아래에 몰지 않는다. frontend는 `src/app` route composition, `src/features`, `src/components/ui`, `src/lib` adapter 경계를 지키며 backend runtime이나 다른 feature private module을 import하지 않는다. UI·Tailwind·config 공용 패키지는 미리 분리하지 않는다. exact package version은 별도 승인된 scaffold에서 호환 가능한 stable 조합으로 고정한다. AI provider/model/version/dimension은 문서 단계에서는 미정이지만 첫 실제 embedding 또는 answer 호출 전에 품질·privacy·비용 evidence와 별도 승인으로 고정한다. 로컬 앱 이미지 제작·검증은 AWS runtime이나 배포 방식의 선택이 아니며 AWS region/SKU/topology는 Phase 6까지 결정하지 않는다.
+현재 workspace는 `apps/web`, `apps/api`, `packages/api-client`다. `apps/worker`와 공유 DB/job 패키지는 Phase 2의 실제 필요 시 추가한다. 전체 목표 폴더 구조는 ADR-0001이 소유한다. API는 `src/modules`의 기능별 모듈과 `src/common`, `src/config`, `src/infrastructure`로 구성한다. 현재 없는 answers 등의 placeholder는 만들지 않는다. frontend는 `src/app` route composition, `src/features`, `src/components/ui`, `src/lib` adapter 경계를 지키며 backend runtime이나 다른 feature private module을 import하지 않는다. UI·Tailwind·config 공용 패키지는 미리 분리하지 않는다. exact package version은 별도 승인된 scaffold에서 호환 가능한 stable 조합으로 고정한다. AI provider/model/version/dimension은 문서 단계에서는 미정이지만 첫 실제 embedding 또는 answer 호출 전에 품질·privacy·비용 evidence와 별도 승인으로 고정한다. 로컬 앱 이미지 제작·검증은 AWS runtime이나 배포 방식의 선택이 아니며 AWS region/SKU/topology는 Phase 6까지 결정하지 않는다.
 
 ## 10. ADR 기준선
 
@@ -129,7 +129,7 @@ Monorepo target은 `apps/web`, `apps/api`, `apps/worker`, `packages/backend`, `p
 2. [ADR-0002: Modular monolith domain ownership](adr/0002-modular-monolith-domain-ownership.md)
 3. [ADR-0003: PostgreSQL, pgvector, Drizzle, revisions and search](adr/0003-postgresql-pgvector-drizzle-revisions-and-search.md)
 4. [ADR-0004: BullMQ embedding delivery, retry and fencing](adr/0004-bullmq-embedding-delivery-retry-and-fencing.md)
-5. [ADR-0005: Google OIDC single owner and access/refresh JWT](adr/0005-google-oidc-single-owner-and-sessions.md)
+5. [ADR-0005: Passport Google login and access/refresh JWT](adr/0005-google-login-and-sessions.md)
 6. [ADR-0006: Frontend information architecture and design](adr/0006-frontend-information-architecture-and-design.md)
 7. [ADR-0007: OpenAPI client and frontend state boundaries](adr/0007-openapi-client-and-frontend-state-boundaries.md)
 8. [ADR-0008: AI provider consent, budget, grounding and retention](adr/0008-ai-provider-consent-budget-grounding-and-retention.md)
@@ -143,18 +143,18 @@ Monorepo target은 `apps/web`, `apps/api`, `apps/worker`, `packages/backend`, `p
 | ID | 선언 | 요구사항 참조 | 검증 참조 |
 |---|---|---|---|
 | `AC-01` | 로그인 진입과 정확히 세 제품 route만 존재하고 각 화면의 정상·빈·대기·실패·충돌·복구 상태가 관찰 가능하다. | `ref:F-07` | `ref:V-01`, `ref:V-10` |
-| `AC-02` | 올바른 configured `(iss, sub)`만 서비스 JWT를 얻고 protocol/tuple negative는 account/refresh write 0건이다. 토큰 용도·만료 검증, access 만료 후 refresh, 원자 rotation·재사용 거절, logout 후 refresh 거절과 access 잔여 유효성, CSRF와 no-state-changing-GET 조건을 통과한다. | `ref:F-01`, `ref:F-06` | `ref:V-02`, `ref:V-03` |
+| `AC-02` | Google에서 검증한 `profile.id`의 첫 로그인은 계정을 만들고 재로그인은 같은 계정을 재사용하며 다른 Google 계정은 구분한다. state/callback/교환/profile 실패는 account/refresh write 0건이다. 계정별 토큰 용도·만료 검증, access 만료 후 refresh, 원자 rotation·재사용 거절, 다른 계정에 영향 없는 logout과 access 잔여 유효성, CSRF와 no-state-changing-GET 조건을 통과한다. | `ref:F-01`, `ref:F-06` | `ref:V-02`, `ref:V-03` |
 | `AC-03` | 새 저장·동일 재전송·다른 payload 재사용·stale/concurrent update·삭제에서 정확한 단일 effect와 current revision 불변식이 실제 PostgreSQL에서 성립한다. | `ref:F-02` | `ref:V-04` |
 | `AC-04` | Redis와 AI가 없어도 저장 직후 한영 혼합 keyword 검색으로 현재 원문과 메모를 owner 격리해 찾고 읽는다. | `ref:F-03`, `ref:F-06` | `ref:V-05`, `ref:V-11` |
 | `AC-05` | AI 설정·동의 전 저장, 최초 활성화, 재동의, 명시적 재시도, queue loss, crash, duplicate, final failure, repair와 late-result 경쟁에서 terminal work를 되살리지 않고 필요한 새 work만 중복 없이 생성하며 현재 revision vector만 한 번 게시한다. 상태·fallback 이유가 정확하다. | `ref:F-04` | `ref:V-06` |
 | `AC-06` | 답변은 explicit request+consent+budget 뒤에만 호출되고 snapshot citation에 grounded된다. 호출 전/후 장애와 재요청에서 결과는 idempotent하며, stale/delete/revoke/expiry 경쟁의 게시 차단과 실제·불명확 비용 정산을 독립적으로 exactly-once 판정한다. | `ref:F-05`, `ref:F-06` | `ref:V-07`, `ref:V-08` |
 | `AC-07` | provider 전송·보존·telemetry 검사에서 금지 content/secret 0건이고 revoke/delete 뒤 즉시 차단과 24시간 내 파생 AI 자료 삭제가 성립한다. | `ref:F-06` | `ref:V-08`, `ref:V-12` |
 | `AC-08` | optional subsystem 실패는 저장·현재 keyword 검색·읽기를 막지 않으며 PostgreSQL 장애는 성공으로 위장되지 않는다. | `ref:F-02`, `ref:F-03`, `ref:F-04`, `ref:F-05` | `ref:V-05`, `ref:V-06`, `ref:V-09` |
-| `AC-09` | package와 여섯 feature module DAG는 acyclic이고 public port 외 deep import, cross-private repository와 app-owned rule/schema가 0건이다. | `ref:F-02`, `ref:F-04`, `ref:F-05`, `ref:F-06` | `ref:V-09` |
-| `AC-10` | 세 화면이 Inter·semantic token·contrast·ARIA·keyboard/focus·reduced-motion·44×44·tablet/mobile 계약을 충족하고 금지 brand asset이 0건이다. | `ref:F-07` | `ref:V-10` |
+| `AC-09` | package와 업무 feature DAG는 acyclic이고 public index 외 deep import, cross-private repository/schema 접근이 0건이다. 앱 내부 업무 소유는 허용하며 공유 패키지는 실제 필요 시 승격한다. | `ref:F-02`, `ref:F-04`, `ref:F-05`, `ref:F-06` | `ref:V-09` |
+| `AC-10` | 세 화면이 ADR-0006의 화면별 글꼴·semantic token·contrast·ARIA·keyboard/focus·reduced-motion·44×44·tablet/mobile 계약을 충족하고 금지 brand asset이 0건이다. | `ref:F-07` | `ref:V-10` |
 | `AC-11` | OpenAPI/client와 frontend state 경계, fixed library names 및 provider/version/topology deferral이 ADR과 일치한다. | `ref:F-01`–`ref:F-07` | `ref:V-01`, `ref:V-09`, `ref:V-13` |
 | `AC-12` | 동결된 40-case 검색·답변 평가와 분리된 1k/10k 성능 측정이 근거성, 무근거 응답, latency와 비용을 재현 가능하게 보고한다. | `ref:F-03`, `ref:F-04`, `ref:F-05` | `ref:V-11` |
-| `AC-13` | 동일 worksheet를 두 검토자가 재계산해 같은 `finalTotalKRW`와 gate를 얻고 30,000 KRW 초과, 근거 누락, memory 또는 restore 실패를 BLOCK한다. | `ref:F-02`–`ref:F-06` | `ref:V-13` |
+| `AC-13` | 모든 사용자의 workload·AI 최대 비용을 합산한 동일 worksheet를 두 검토자가 재계산해 같은 `finalTotalKRW`와 gate를 얻고 월 서비스 전체 30,000 KRW 초과, 근거 누락, memory 또는 restore 실패를 BLOCK한다. | `ref:F-02`–`ref:F-06` | `ref:V-13` |
 | `AC-14` | canonical 문서는 devfootnote만 설명하고 exact ADR link와 F/AC/V/non-goal typed graph가 완전하며 현재 문서 전환에서 Git·제품·test·IaC·cloud action은 0건이다. | `ref:F-01`–`ref:F-07`, `ref:NG-06`, `ref:NG-07` | `ref:V-14` |
 
 ## 12. Non-goal 선언
@@ -163,7 +163,7 @@ Monorepo target은 `apps/web`, `apps/api`, `apps/worker`, `packages/backend`, `p
 
 | ID | 선언 |
 |---|---|
-| `NG-01` | 공개 self-signup, 초대, role, team, 공유·협업 권한과 복수 production owner |
+| `NG-01` | 이메일/비밀번호 가입, 초대, role, team과 공유·협업 권한. 검증된 Google 계정의 첫 로그인 자동 계정 생성은 포함한다. |
 | `NG-02` | crawler, browser extension, PDF/image OCR, YouTube 전사와 전체 GitHub code 분석 |
 | `NG-03` | 장기 chat history, billing/subscription, 추천 feed, mobile app, Agent/MCP와 지식 graph |
 | `NG-04` | 초기 reranker, HNSW tuning, 고급 chunking과 범용 workflow engine |
