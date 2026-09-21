@@ -2,7 +2,7 @@
 
 /* ADR-0006의 semantic token 중 현재 화면이 쓰는 것과, ADR-0006이 scaffold에서 값을 고정하라고
    요구하는 상태 ramp만 둔다. text-placeholder·decoration-faint·action-pressed는 해당 control을
-   만들 때 추가한다. 상태 ramp 값은 tests/design.test.ts의 대비 검사를 통과한 값이다. */
+   만들 때 추가한다. 실제 화면의 대비·접근성은 Playwright/axe 여정에서 확인한다. */
 @theme {
   --color-canvas: #f6f5f4;
   --color-surface: #ffffff;
@@ -17,6 +17,15 @@
   --color-status-success: #21633b;
   --color-status-destructive: #a12622;
 
+  /* 로그인·자료함·공통 헤더의 종이색 팔레트. 검색·읽기 본문 토큰은 유지한다. */
+  --color-paper-canvas: #f8f7f2;
+  --color-paper-ink: #292e28;
+  --color-paper-muted: #62665d;
+  --color-paper-rule: #dcded5;
+  --color-paper-accent: #536047;
+  --color-paper-control: #74796e;
+  --color-paper-hover: #f0f1eb;
+
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -29,6 +38,9 @@
     font-family: var(--font-sans);
     font-size: 16px;
     line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
   }
 
   :focus-visible {
