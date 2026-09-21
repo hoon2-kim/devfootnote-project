@@ -4,6 +4,490 @@ export type ClientOptions = {
     baseUrl: string;
 };
 
+export type ValidationIssueDto = {
+    field: string;
+    code: string;
+    message: string;
+};
+
+export type ApiErrorDto = {
+    success: false;
+    error: string;
+    message: string;
+    errors?: Array<ValidationIssueDto>;
+};
+
+export type CsrfTokenDto = {
+    csrfToken: string;
+};
+
+export type OwnerDto = {
+    ownerId: string;
+};
+
+export type CreatedMaterialDto = {
+    id: string;
+    revisionId: string;
+};
+
+export type CreateMaterialDto = {
+    /**
+     * 재시도 시 같은 입력과 함께 유지하는 요청 ID
+     */
+    idempotencyKey: string;
+    body: string;
+    title?: string;
+    note?: string;
+    context?: string;
+    sourceUrl?: string;
+};
+
+export type MaterialSummaryDto = {
+    id: string;
+    revisionId: string;
+    revision: number;
+    title: string | null;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type MaterialListDto = {
+    page: number;
+    hasNext: boolean;
+    items: Array<MaterialSummaryDto>;
+};
+
+export type UpdateMaterialDto = {
+    /**
+     * 재시도 시 같은 입력과 함께 유지하는 요청 ID
+     */
+    idempotencyKey: string;
+    body: string;
+    title?: string;
+    note?: string;
+    context?: string;
+    sourceUrl?: string;
+    expectedRevisionId: string;
+};
+
+export type DeleteMaterialDto = {
+    idempotencyKey: string;
+    expectedRevisionId: string;
+};
+
+export type MaterialDetailDto = {
+    id: string;
+    revisionId: string;
+    revision: number;
+    title: string | null;
+    createdAt: string;
+    updatedAt: string;
+    body: string;
+    note: string | null;
+    context: string | null;
+    sourceUrl: string | null;
+};
+
+export type SearchItemDto = {
+    id: string;
+    revisionId: string;
+    revision: number;
+    title: string | null;
+    updatedAt: string;
+    snippet: string;
+    matchedField: 'body' | 'note' | 'context' | 'title' | 'sourceUrl';
+};
+
+export type SearchResponseDto = {
+    page: number;
+    hasNext: boolean;
+    items: Array<SearchItemDto>;
+};
+
+export type BeginGoogleLoginData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * 허용된 자료함·검색·문서 상대 경로. 유효하지 않으면 /library로 복귀한다.
+         */
+        returnTo?: string;
+    };
+    url: '/api/v1/auth/google';
+};
+
+export type BeginGoogleLoginErrors = {
+    /**
+     * 유효한 인증이 필요함
+     */
+    401: ApiErrorDto;
+    /**
+     * 요청 출처 또는 CSRF 검증 실패
+     */
+    403: ApiErrorDto;
+    /**
+     * 예상하지 못한 인증 처리 오류
+     */
+    500: ApiErrorDto;
+    /**
+     * 인증 저장소 또는 제공자 연결 실패
+     */
+    503: ApiErrorDto;
+};
+
+export type BeginGoogleLoginError = BeginGoogleLoginErrors[keyof BeginGoogleLoginErrors];
+
+export type CompleteGoogleLoginData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/google/callback';
+};
+
+export type CompleteGoogleLoginErrors = {
+    /**
+     * 유효한 인증이 필요함
+     */
+    401: ApiErrorDto;
+    /**
+     * 요청 출처 또는 CSRF 검증 실패
+     */
+    403: ApiErrorDto;
+    /**
+     * 예상하지 못한 인증 처리 오류
+     */
+    500: ApiErrorDto;
+    /**
+     * 인증 저장소 또는 제공자 연결 실패
+     */
+    503: ApiErrorDto;
+};
+
+export type CompleteGoogleLoginError = CompleteGoogleLoginErrors[keyof CompleteGoogleLoginErrors];
+
+export type GetCsrfTokenData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/csrf';
+};
+
+export type GetCsrfTokenErrors = {
+    /**
+     * 유효한 인증이 필요함
+     */
+    401: ApiErrorDto;
+    /**
+     * 요청 출처 또는 CSRF 검증 실패
+     */
+    403: ApiErrorDto;
+    /**
+     * 예상하지 못한 인증 처리 오류
+     */
+    500: ApiErrorDto;
+    /**
+     * 인증 저장소 또는 제공자 연결 실패
+     */
+    503: ApiErrorDto;
+};
+
+export type GetCsrfTokenError = GetCsrfTokenErrors[keyof GetCsrfTokenErrors];
+
+export type GetCsrfTokenResponses = {
+    200: {
+        success: true;
+        data: CsrfTokenDto;
+    };
+};
+
+export type GetCsrfTokenResponse = GetCsrfTokenResponses[keyof GetCsrfTokenResponses];
+
+export type GetMeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/me';
+};
+
+export type GetMeErrors = {
+    /**
+     * 유효한 인증이 필요함
+     */
+    401: ApiErrorDto;
+    /**
+     * 요청 출처 또는 CSRF 검증 실패
+     */
+    403: ApiErrorDto;
+    /**
+     * 예상하지 못한 인증 처리 오류
+     */
+    500: ApiErrorDto;
+    /**
+     * 인증 저장소 또는 제공자 연결 실패
+     */
+    503: ApiErrorDto;
+};
+
+export type GetMeError = GetMeErrors[keyof GetMeErrors];
+
+export type GetMeResponses = {
+    200: {
+        success: true;
+        data: OwnerDto;
+    };
+};
+
+export type GetMeResponse = GetMeResponses[keyof GetMeResponses];
+
+export type RefreshAuthenticationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/refresh';
+};
+
+export type RefreshAuthenticationErrors = {
+    /**
+     * 유효한 인증이 필요함
+     */
+    401: ApiErrorDto;
+    /**
+     * 요청 출처 또는 CSRF 검증 실패
+     */
+    403: ApiErrorDto;
+    /**
+     * 예상하지 못한 인증 처리 오류
+     */
+    500: ApiErrorDto;
+    /**
+     * 인증 저장소 또는 제공자 연결 실패
+     */
+    503: ApiErrorDto;
+};
+
+export type RefreshAuthenticationError = RefreshAuthenticationErrors[keyof RefreshAuthenticationErrors];
+
+export type RefreshAuthenticationResponses = {
+    /**
+     * JWT 쿠키 교체 완료
+     */
+    204: void;
+};
+
+export type RefreshAuthenticationResponse = RefreshAuthenticationResponses[keyof RefreshAuthenticationResponses];
+
+export type LogoutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/logout';
+};
+
+export type LogoutErrors = {
+    /**
+     * 유효한 인증이 필요함
+     */
+    401: ApiErrorDto;
+    /**
+     * 요청 출처 또는 CSRF 검증 실패
+     */
+    403: ApiErrorDto;
+    /**
+     * 예상하지 못한 인증 처리 오류
+     */
+    500: ApiErrorDto;
+    /**
+     * 인증 저장소 또는 제공자 연결 실패
+     */
+    503: ApiErrorDto;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
+
+export type LogoutResponses = {
+    /**
+     * 현재 refresh 철회 및 쿠키 삭제
+     */
+    204: void;
+};
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
+
+export type ListMaterialsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/materials';
+};
+
+export type ListMaterialsErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type ListMaterialsError = ListMaterialsErrors[keyof ListMaterialsErrors];
+
+export type ListMaterialsResponses = {
+    200: {
+        success: true;
+        data: MaterialListDto;
+    };
+};
+
+export type ListMaterialsResponse = ListMaterialsResponses[keyof ListMaterialsResponses];
+
+export type CreateMaterialData = {
+    body: CreateMaterialDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/materials';
+};
+
+export type CreateMaterialErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    409: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type CreateMaterialError = CreateMaterialErrors[keyof CreateMaterialErrors];
+
+export type CreateMaterialResponses = {
+    201: {
+        success: true;
+        data: CreatedMaterialDto;
+    };
+};
+
+export type CreateMaterialResponse = CreateMaterialResponses[keyof CreateMaterialResponses];
+
+export type DeleteMaterialData = {
+    body: DeleteMaterialDto;
+    path: {
+        materialId: string;
+    };
+    query?: never;
+    url: '/api/v1/materials/{materialId}';
+};
+
+export type DeleteMaterialErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type DeleteMaterialError = DeleteMaterialErrors[keyof DeleteMaterialErrors];
+
+export type DeleteMaterialResponses = {
+    200: {
+        success: true;
+        data: CreatedMaterialDto;
+    };
+};
+
+export type DeleteMaterialResponse = DeleteMaterialResponses[keyof DeleteMaterialResponses];
+
+export type GetMaterialData = {
+    body?: never;
+    path: {
+        materialId: string;
+    };
+    query?: never;
+    url: '/api/v1/materials/{materialId}';
+};
+
+export type GetMaterialErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type GetMaterialError = GetMaterialErrors[keyof GetMaterialErrors];
+
+export type GetMaterialResponses = {
+    200: {
+        success: true;
+        data: MaterialDetailDto;
+    };
+};
+
+export type GetMaterialResponse = GetMaterialResponses[keyof GetMaterialResponses];
+
+export type UpdateMaterialData = {
+    body: UpdateMaterialDto;
+    path: {
+        materialId: string;
+    };
+    query?: never;
+    url: '/api/v1/materials/{materialId}';
+};
+
+export type UpdateMaterialErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type UpdateMaterialError = UpdateMaterialErrors[keyof UpdateMaterialErrors];
+
+export type UpdateMaterialResponses = {
+    200: {
+        success: true;
+        data: CreatedMaterialDto;
+    };
+};
+
+export type UpdateMaterialResponse = UpdateMaterialResponses[keyof UpdateMaterialResponses];
+
+export type SearchMaterialsData = {
+    body?: never;
+    path?: never;
+    query: {
+        page?: number;
+        pageSize?: number;
+        q: string;
+    };
+    url: '/api/v1/search';
+};
+
+export type SearchMaterialsErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type SearchMaterialsError = SearchMaterialsErrors[keyof SearchMaterialsErrors];
+
+export type SearchMaterialsResponses = {
+    200: {
+        success: true;
+        data: SearchResponseDto;
+    };
+};
+
+export type SearchMaterialsResponse = SearchMaterialsResponses[keyof SearchMaterialsResponses];
+
 export type GetLivenessData = {
     body?: never;
     path?: never;

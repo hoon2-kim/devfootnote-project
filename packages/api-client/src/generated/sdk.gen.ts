@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { GetLivenessData, GetLivenessErrors, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses } from './types.gen.js';
+import type { BeginGoogleLoginData, BeginGoogleLoginErrors, CompleteGoogleLoginData, CompleteGoogleLoginErrors, CreateMaterialData, CreateMaterialErrors, CreateMaterialResponses, DeleteMaterialData, DeleteMaterialErrors, DeleteMaterialResponses, GetCsrfTokenData, GetCsrfTokenErrors, GetCsrfTokenResponses, GetLivenessData, GetLivenessErrors, GetLivenessResponses, GetMaterialData, GetMaterialErrors, GetMaterialResponses, GetMeData, GetMeErrors, GetMeResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, ListMaterialsData, ListMaterialsErrors, ListMaterialsResponses, LogoutData, LogoutErrors, LogoutResponses, RefreshAuthenticationData, RefreshAuthenticationErrors, RefreshAuthenticationResponses, SearchMaterialsData, SearchMaterialsErrors, SearchMaterialsResponses, UpdateMaterialData, UpdateMaterialErrors, UpdateMaterialResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -17,6 +17,110 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
      */
     meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
+
+export const beginGoogleLogin = <ThrowOnError extends boolean = false>(options?: Options<BeginGoogleLoginData, ThrowOnError>): RequestResult<unknown, BeginGoogleLoginErrors, ThrowOnError> => (options?.client ?? client).get<unknown, BeginGoogleLoginErrors, ThrowOnError>({ url: '/api/v1/auth/google', ...options });
+
+export const completeGoogleLogin = <ThrowOnError extends boolean = false>(options?: Options<CompleteGoogleLoginData, ThrowOnError>): RequestResult<unknown, CompleteGoogleLoginErrors, ThrowOnError> => (options?.client ?? client).get<unknown, CompleteGoogleLoginErrors, ThrowOnError>({ url: '/api/v1/auth/google/callback', ...options });
+
+export const getCsrfToken = <ThrowOnError extends boolean = false>(options?: Options<GetCsrfTokenData, ThrowOnError>): RequestResult<GetCsrfTokenResponses, GetCsrfTokenErrors, ThrowOnError> => (options?.client ?? client).get<GetCsrfTokenResponses, GetCsrfTokenErrors, ThrowOnError>({ url: '/api/v1/auth/csrf', ...options });
+
+export const getMe = <ThrowOnError extends boolean = false>(options?: Options<GetMeData, ThrowOnError>): RequestResult<GetMeResponses, GetMeErrors, ThrowOnError> => (options?.client ?? client).get<GetMeResponses, GetMeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'devfootnote_access',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/auth/me',
+    ...options
+});
+
+export const refreshAuthentication = <ThrowOnError extends boolean = false>(options?: Options<RefreshAuthenticationData, ThrowOnError>): RequestResult<RefreshAuthenticationResponses, RefreshAuthenticationErrors, ThrowOnError> => (options?.client ?? client).post<RefreshAuthenticationResponses, RefreshAuthenticationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'devfootnote_refresh',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+    url: '/api/v1/auth/refresh',
+    ...options
+});
+
+export const logout = <ThrowOnError extends boolean = false>(options?: Options<LogoutData, ThrowOnError>): RequestResult<LogoutResponses, LogoutErrors, ThrowOnError> => (options?.client ?? client).post<LogoutResponses, LogoutErrors, ThrowOnError>({
+    security: [{ name: 'X-CSRF-Token', type: 'apiKey' }],
+    url: '/api/v1/auth/logout',
+    ...options
+});
+
+export const listMaterials = <ThrowOnError extends boolean = false>(options?: Options<ListMaterialsData, ThrowOnError>): RequestResult<ListMaterialsResponses, ListMaterialsErrors, ThrowOnError> => (options?.client ?? client).get<ListMaterialsResponses, ListMaterialsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'devfootnote_access',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/materials',
+    ...options
+});
+
+export const createMaterial = <ThrowOnError extends boolean = false>(options: Options<CreateMaterialData, ThrowOnError>): RequestResult<CreateMaterialResponses, CreateMaterialErrors, ThrowOnError> => (options.client ?? client).post<CreateMaterialResponses, CreateMaterialErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'devfootnote_access',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+    url: '/api/v1/materials',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteMaterial = <ThrowOnError extends boolean = false>(options: Options<DeleteMaterialData, ThrowOnError>): RequestResult<DeleteMaterialResponses, DeleteMaterialErrors, ThrowOnError> => (options.client ?? client).delete<DeleteMaterialResponses, DeleteMaterialErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'devfootnote_access',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+    url: '/api/v1/materials/{materialId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getMaterial = <ThrowOnError extends boolean = false>(options: Options<GetMaterialData, ThrowOnError>): RequestResult<GetMaterialResponses, GetMaterialErrors, ThrowOnError> => (options.client ?? client).get<GetMaterialResponses, GetMaterialErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'devfootnote_access',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/materials/{materialId}',
+    ...options
+});
+
+export const updateMaterial = <ThrowOnError extends boolean = false>(options: Options<UpdateMaterialData, ThrowOnError>): RequestResult<UpdateMaterialResponses, UpdateMaterialErrors, ThrowOnError> => (options.client ?? client).put<UpdateMaterialResponses, UpdateMaterialErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'devfootnote_access',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+    url: '/api/v1/materials/{materialId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const searchMaterials = <ThrowOnError extends boolean = false>(options: Options<SearchMaterialsData, ThrowOnError>): RequestResult<SearchMaterialsResponses, SearchMaterialsErrors, ThrowOnError> => (options.client ?? client).get<SearchMaterialsResponses, SearchMaterialsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'devfootnote_access',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/search',
+    ...options
+});
 
 export const getLiveness = <ThrowOnError extends boolean = false>(options?: Options<GetLivenessData, ThrowOnError>): RequestResult<GetLivenessResponses, GetLivenessErrors, ThrowOnError> => (options?.client ?? client).get<GetLivenessResponses, GetLivenessErrors, ThrowOnError>({ url: '/api/v1/health/live', ...options });
 

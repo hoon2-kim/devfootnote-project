@@ -20,17 +20,16 @@ const messages: Record<string, string> = {
 const FALLBACK_MESSAGE = '입력을 확인해 주세요.';
 // forbidNonWhitelisted가 만드는 오류의 property는 요청자가 정한 key이므로 본문에 반사하지 않는다.
 const REFLECTS_REQUEST_KEY = 'whitelistValidation';
-// 배열·중첩 DTO가 만든 대량 오류로 응답이 커지지 않도록 상한을 둔다.
 const MAX_ISSUES = 20;
 
 function collect(errors: ValidationError[], parent: string): ValidationIssue[] {
-  return errors.flatMap(error => {
+  return errors.flatMap((error) => {
     const field = parent ? `${parent}.${error.property}` : error.property;
     const own = Object.keys(error.constraints ?? {})
-      .filter(code => code !== REFLECTS_REQUEST_KEY)
-      // 메시지를 등록하지 않은 제약도 어느 필드가 틀렸는지는 알려 준다. class-validator의
-      // 기본 메시지에는 거부된 값이 포함될 수 있으므로 그대로 쓰지 않는다.
-      .map(code => ({ field, code, message: messages[code] ?? FALLBACK_MESSAGE }));
+      .filter((code) => code !== REFLECTS_REQUEST_KEY)
+      // class-validator 기본 메시지에는 거부된 값이 들어 있어 쓰지 않는다. 미등록 제약도 필드는 알려 준다.
+      .map((code) => ({ field, code, message: messages[code] ?? FALLBACK_MESSAGE }));
+
     return [...own, ...collect(error.children ?? [], field)];
   });
 }
