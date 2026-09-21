@@ -1,0 +1,51 @@
+# 실제 app profile에 테스트 설정만 덮는다. 개발 env·포트·볼륨은 사용하지 않는다.
+services:
+  api:
+    image: devfootnote-api:phase1-smoke
+    env_file: !reset []
+    environment:
+      NODE_ENV: production
+      APP_ORIGIN: ${SMOKE_ORIGIN:?}
+      GOOGLE_CLIENT_ID: fixture.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: fixture-client-secret
+      JWT_ACCESS_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      JWT_REFRESH_SECRET: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+      CSRF_SECRET: fixture-csrf-secret-0123456789abcdeffixture-csrf-secret-0123456789abcdef
+      NODE_OPTIONS: --import=/fixtures/google-strategy.mjs
+    volumes:
+      - ./tests/images/google-strategy.mjs:/fixtures/google-strategy.mjs:ro
+    depends_on:
+      google:
+        condition: service_healthy
+  web:
+    image: devfootnote-web:phase1-smoke
+    ports: !override ['127.0.0.1::3000']
+  postgres:
+    ports: !override ['127.0.0.1::5432']
+  google:
+    image: devfootnote-api:phase1-smoke
+    command: ['node', '/fixtures/google.mjs']
+    volumes:
+      - ./tests/images/google.mjs:/fixtures/google.mjs:ro
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/userinfo').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 20
+  migration:
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://devfootnote:devfootnote_local_only@postgres:5432/devfootnote
+    depends_on:
+      postgres:
+        condition: service_healthy
