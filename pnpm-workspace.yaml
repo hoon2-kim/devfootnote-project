@@ -7,6 +7,16 @@ saveExact: true
 # 루트 테스트와 각 workspace가 같은 물리 모듈을 쓰도록 공유 의존성의 버전을 한 곳에서 소유한다.
 # 여기 없는 의존성은 해당 package 하나만 사용한다.
 catalog:
+  '@tanstack/react-query': 5.102.8
+  zod: 4.6.5
+  '@nestjs/config': 12.0.0
+  '@nestjs/jwt': 12.0.2
+  '@nestjs/passport': 12.0.0
+  passport: 0.7.0
+  'passport-jwt': 4.0.1
+  'passport-google-oauth20': 2.0.0
+  '@types/passport-google-oauth20': 2.0.17
+  '@types/passport-jwt': 4.0.1
   '@nestjs/common': 12.0.2
   '@nestjs/core': 12.0.2
   '@nestjs/platform-express': 12.0.2

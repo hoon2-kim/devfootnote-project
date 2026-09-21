@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .next/
+.next-playwright/
+apps/web/next-env.d.ts
 .turbo/
 *.tsbuildinfo
 .env
@@ -9,6 +11,7 @@ dist/
 test-results/
 playwright-report/
 /docs/evidence/
+/docs/code-and-data-guide.md
 .DS_Store
 .gjc/
 

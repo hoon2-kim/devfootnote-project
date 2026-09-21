@@ -1,12 +1,30 @@
 {
   "$schema": "https://turborepo.com/schema.json",
+  "globalDependencies": ["tsconfig.json", ".nvmrc"],
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "!.next/cache/**"], "env": ["NODE_ENV"] },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["NODE_ENV", "API_UPSTREAM_URL"]
+    },
     "typecheck": { "dependsOn": ["^build"], "outputs": [] },
-    "dev": { "dependsOn": ["^build"], "persistent": true, "cache": false, "passThroughEnv": ["DATABASE_URL", "PORT", "LOG_LEVEL"] },
-    "test:integration": { "cache": false },
-    "test:browser": { "cache": false },
-    "db:generate": { "cache": false },
-    "db:migrate": { "cache": false, "passThroughEnv": ["DATABASE_URL"] }
+    "@devfootnote/web#typecheck": { "dependsOn": ["^build"], "outputs": [], "cache": false },
+    "dev": {
+      "dependsOn": ["^build"],
+      "persistent": true,
+      "cache": false,
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "PORT",
+        "LOG_LEVEL",
+        "APP_ORIGIN",
+        "API_UPSTREAM_URL",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "JWT_ACCESS_SECRET",
+        "JWT_REFRESH_SECRET",
+        "CSRF_SECRET"
+      ]
+    }
   }
 }

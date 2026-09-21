@@ -1,5 +1,15 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "module": "ESNext", "moduleResolution": "Bundler", "noEmit": true, "lib": ["ES2022", "DOM"] },
-  "include": ["tests/**/*.ts", "vitest.config.ts", "playwright.config.ts"]
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": [
+    "tests/**/*.ts",
+    "apps/api/src/**/*.spec.ts",
+    "vitest.config.ts",
+    "playwright*.config.ts"
+  ]
 }

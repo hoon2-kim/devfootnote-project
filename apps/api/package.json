@@ -2,16 +2,34 @@
   "name": "@devfootnote/api",
   "private": true,
   "version": "0.0.0",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsc-watch --onSuccess 'node --watch --env-file-if-exists=../../.env dist/main.js'",
-    "start": "node --env-file-if-exists=../../.env dist/main.js",
-    "openapi:generate": "node dist/openapi.js"
+    "dev": "tsc-watch --onSuccess 'node ../../scripts/run-env.mjs api dev --watch dist/main.js'",
+    "start": "node ../../scripts/run-env.mjs api prod dist/main.js",
+    "openapi:generate": "node dist/openapi.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node ../../scripts/run-env.mjs api dev scripts/migrate.mjs",
+    "db:migrate:prod": "node ../../scripts/run-env.mjs api prod scripts/migrate.mjs"
   },
   "dependencies": {
-    "@devfootnote/backend": "workspace:*",
+    "cookie": "2.0.1",
+    "cookie-parser": "1.4.7",
+    "csrf-csrf": "4.0.3",
+    "zod": "catalog:",
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:",
+    "pino": "catalog:",
     "@nestjs/common": "catalog:",
+    "@nestjs/config": "catalog:",
+    "@nestjs/jwt": "catalog:",
+    "@nestjs/passport": "catalog:",
+    "passport": "catalog:",
+    "passport-jwt": "catalog:",
+    "passport-google-oauth20": "catalog:",
     "@nestjs/core": "catalog:",
     "@nestjs/platform-express": "catalog:",
     "@nestjs/swagger": "catalog:",
@@ -22,6 +40,10 @@
     "rxjs": "catalog:"
   },
   "devDependencies": {
+    "drizzle-kit": "catalog:",
+    "@types/cookie-parser": "1.4.10",
+    "@types/passport-google-oauth20": "catalog:",
+    "@types/passport-jwt": "catalog:",
     "tsc-watch": "7.2.0"
   }
 }

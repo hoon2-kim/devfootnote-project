@@ -1,0 +1,16 @@
+**/node_modules/
+**/dist/
+**/.next*/
+**/.turbo/
+**/next-env.d.ts
+**/*.tsbuildinfo
+.git/
+.gjc/
+.codex/
+docs/
+test-results/
+playwright-report/
+packages/api-client/src/generated/
+apps/api/drizzle/
+apps/api/openapi.json
+pnpm-lock.yaml
