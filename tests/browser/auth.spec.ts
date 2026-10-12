@@ -7,7 +7,7 @@ import { signIn } from './sign-in';
 
 test.beforeEach(async ({ auth }) => {
   await auth.pool.query(
-    'truncate auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents',
+    'truncate answer_call_attempts, answer_requests, usage_answer_consents, indexing_embedding_vectors, usage_embedding_call_receipts, auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents, indexing_embedding_attempts, indexing_embedding_works, indexing_embedding_activations, indexing_activation_receipts, usage_embedding_consents, usage_embedding_budgets, usage_embedding_reservations',
   );
   auth.setSubject(GOOGLE_SUBJECT_A);
   auth.setGoogleFailure(undefined);
@@ -51,6 +51,14 @@ for (const width of [320, 768, 1280]) {
     await page.setViewportSize({ width, height: 800 });
     await signIn(page);
     await expect(page.getByRole('heading', { name: '내 자료함', exact: true })).toBeVisible();
+    const logo = page.getByRole('banner').getByRole('img', { name: 'devfootnote', exact: true });
+
+    await expect(logo).toHaveAttribute('src', '/brand/devfootnote-horizontal.svg');
+    await expect
+      .poll(() =>
+        logo.evaluate((image) => image instanceof HTMLImageElement && image.naturalWidth > 0),
+      )
+      .toBe(true);
     const cookies = await context.cookies();
 
     for (const name of ['devfootnote_access', 'devfootnote_refresh']) {
@@ -258,7 +266,9 @@ test('로그아웃 뒤 다른 Google 계정은 새 owner로 확인한다', async
   expect(second.data.ownerId).not.toBe(first.data.ownerId);
   await expect(page.getByText('아직 저장한 자료가 없습니다')).toBeVisible();
   await page.goto('/search?q=격리검증');
-  await expect(page.getByRole('status')).toContainText('일치하는 자료가 없습니다.');
+  await expect(page.getByRole('region', { name: '검색 결과' }).getByRole('status')).toContainText(
+    '일치하는 자료가 없습니다.',
+  );
   await page.goto(firstDocument);
   await expect(page.getByRole('heading', { name: '자료를 찾을 수 없습니다' })).toBeVisible();
 });

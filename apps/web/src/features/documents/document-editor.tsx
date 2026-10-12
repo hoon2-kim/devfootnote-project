@@ -8,6 +8,7 @@ import { getMaterial, updateMaterial, type MaterialDetailDto } from '@devfootnot
 import { Button } from '../../components/ui/button';
 import { ApiError, unwrapApiResult } from '../../lib/api-client';
 import { useApiClient } from '../../lib/api-provider';
+import { gowunBatang } from '../../lib/fonts';
 import {
   MaterialFields,
   materialFormSchema,
@@ -45,7 +46,6 @@ export function DocumentEditor({
   // 편집을 시작한 버전을 고정한다. background 조회로 props가 바뀌어도 초안의 기준을 바꾸지 않는다.
   const [expectedRevisionId, setExpectedRevisionId] = useState(material.revisionId);
   const request = useRef<{ fingerprint: string; key: string } | undefined>(undefined);
-  const [reloadError, setReloadError] = useState(false);
   const save = useMutation({
     mutationFn: async (values: MaterialFormValues) => {
       const body = { ...values, sourceUrl: values.sourceUrl || undefined, expectedRevisionId };
@@ -78,29 +78,30 @@ export function DocumentEditor({
     },
   });
 
-  async function loadLatest() {
-    setReloadError(false);
-    const result = await getMaterial({ client, path: { materialId: material.id } });
+  const reload = useMutation({
+    mutationFn: async () => {
+      const result = await getMaterial({ client, path: { materialId: material.id } });
 
-    if (!result.data) {
-      setReloadError(true);
+      return unwrapApiResult(result);
+    },
+    onSuccess: (latest) => {
+      // 명시적 조회가 성공한 경우에만 초안과 기대 버전을 함께 교체한다.
+      form.reset(formValues(latest));
+      setExpectedRevisionId(latest.revisionId);
+      request.current = undefined;
+      save.reset();
+    },
+  });
 
-      return;
-    }
-
-    // 사용자가 최신 내용 불러오기를 선택하고 조회에도 성공한 경우에만 초안·기대 버전을 교체한다.
-    form.reset(formValues(result.data.data));
-    setExpectedRevisionId(result.data.data.revisionId);
-    request.current = undefined;
-    save.reset();
-  }
+  // 늦은 조회 응답이 조회 시작 뒤의 새 입력·저장과 경합하지 않게 한다.
+  const busy = save.isPending || reload.isPending;
 
   return (
     <section
       aria-labelledby="edit-title"
-      className="mb-8 rounded-xl border border-border-subtle bg-surface p-6 sm:p-8"
+      className="mb-10 border border-paper-rule bg-surface p-5 sm:p-8"
     >
-      <h2 id="edit-title" className="mb-6 text-xl font-semibold">
+      <h2 id="edit-title" className={`${gowunBatang.className} mb-8 text-2xl`}>
         자료 수정
       </h2>
       <form
@@ -108,7 +109,7 @@ export function DocumentEditor({
         onSubmit={form.handleSubmit((values) => save.mutate(values))}
         className="space-y-5"
       >
-        <MaterialFields form={form} disabled={save.isPending} />
+        <MaterialFields form={form} disabled={busy} />
         {save.isError && (
           <div role="alert" className="space-y-3 text-sm text-status-error">
             <p>
@@ -117,22 +118,23 @@ export function DocumentEditor({
                 : '수정하지 못했습니다. 입력은 보존했습니다. 연결과 로그인 상태를 확인한 뒤 재시도해 주세요.'}
             </p>
             {save.error instanceof ApiError && save.error.status === 409 && (
-              <Button type="button" onClick={() => void loadLatest()}>
-                입력을 버리고 최신 내용 불러오기
+              <Button type="button" disabled={busy} onClick={() => reload.mutate()}>
+                {reload.isPending ? '최신 내용 불러오는 중…' : '입력을 버리고 최신 내용 불러오기'}
               </Button>
             )}
           </div>
         )}
-        {reloadError && (
+        {reload.isPending && <p role="status">최신 내용을 불러오고 있습니다.</p>}
+        {reload.isError && (
           <p role="alert" className="text-status-error">
             최신 내용을 불러오지 못했습니다. 입력은 그대로 유지됩니다.
           </p>
         )}
         <div className="flex gap-3">
-          <Button type="submit" variant="primary" disabled={save.isPending}>
+          <Button type="submit" variant="primary" disabled={busy}>
             {save.isPending ? '저장 중…' : '수정 저장'}
           </Button>
-          <Button type="button" disabled={save.isPending} onClick={onClose}>
+          <Button type="button" disabled={busy} onClick={onClose}>
             편집 취소
           </Button>
         </div>

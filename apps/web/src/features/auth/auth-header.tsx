@@ -14,14 +14,14 @@ export function AuthHeader({
 
   return (
     <header className="bg-paper-canvas text-paper-ink [--color-focus:var(--color-paper-accent)]">
-      <div className="mx-auto grid max-w-5xl grid-cols-[1fr_auto] items-center gap-x-6 border-b border-paper-rule px-6 pt-5 sm:grid-cols-[1fr_auto_auto] sm:px-8 sm:py-5">
+      <div className="mx-auto grid max-w-6xl grid-cols-[1fr_auto] items-center gap-x-8 border-b border-paper-rule px-6 pt-5 sm:grid-cols-[1fr_auto_auto] sm:px-10 sm:py-5">
         <Wordmark />
         <Button
           type="button"
           variant="ghost"
           disabled={signingOut}
           onClick={onSignOut}
-          className="rounded text-paper-muted hover:bg-paper-hover sm:col-start-3 sm:row-start-1"
+          className="text-paper-muted sm:col-start-3 sm:row-start-1"
         >
           {signingOut ? (
             <LoaderCircle aria-hidden="true" className="motion-safe:animate-spin" />

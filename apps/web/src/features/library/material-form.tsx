@@ -18,6 +18,22 @@ import {
 } from './material-form.schema';
 import { invalidateMaterialCollections } from './material-queries';
 import { applyMaterialFormErrors } from './material-form.errors';
+import { gowunBatang } from '../../lib/fonts';
+
+function saveErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    switch (error.status) {
+      case 401:
+        return '로그인이 만료되었습니다. 새 탭에서 다시 로그인한 뒤 이 화면에서 재시도해 주세요. 입력은 유지됩니다.';
+      case 409:
+        return '같은 요청 ID의 저장 내용이 다릅니다. 자료 목록을 확인한 뒤 내용을 수정해 주세요.';
+      case 400:
+        return '입력 내용을 확인해 주세요. 작성한 내용은 유지됩니다.';
+    }
+  }
+
+  return '저장을 확인하지 못했습니다. 연결과 쿠키 설정을 확인한 뒤 다시 저장해 주세요. 입력은 유지됩니다.';
+}
 
 // 패널을 접을 때도 마운트를 유지하고 hidden으로 가린다. 초안·오류·재시도 key를 보존하기 위해서다.
 export function MaterialForm({
@@ -88,7 +104,7 @@ export function MaterialForm({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 id="save-title" className="text-xl font-semibold">
+          <h2 id="save-title" className={`${gowunBatang.className} text-2xl`}>
             새 자료 남기기
           </h2>
           <p className="mt-2 text-sm leading-6 text-paper-muted">원문만 있어도 저장할 수 있어요.</p>
@@ -99,7 +115,7 @@ export function MaterialForm({
           disabled={save.isPending}
           onClick={onClose}
           aria-label="작성 패널 닫기"
-          className="shrink-0 rounded hover:bg-paper-hover"
+          className="shrink-0"
         >
           <X aria-hidden="true" />
         </Button>
@@ -110,18 +126,12 @@ export function MaterialForm({
           setSavedId(undefined);
           save.mutate(values);
         })}
-        className="mt-6 space-y-5"
+        className="mt-8 space-y-6"
       >
         <MaterialFields form={form} disabled={save.isPending} />
         {save.isError && (
           <p role="alert" className="text-sm leading-6 text-status-error">
-            {save.error instanceof ApiError && save.error.status === 401
-              ? '로그인이 만료되었습니다. 새 탭에서 다시 로그인한 뒤 이 화면에서 재시도해 주세요. 입력은 유지됩니다.'
-              : save.error instanceof ApiError && save.error.status === 409
-                ? '같은 요청 ID의 저장 내용이 다릅니다. 자료 목록을 확인한 뒤 내용을 수정해 주세요.'
-                : save.error instanceof ApiError && save.error.status === 400
-                  ? '입력 내용을 확인해 주세요. 작성한 내용은 유지됩니다.'
-                  : '저장을 확인하지 못했습니다. 연결과 쿠키 설정을 확인한 뒤 다시 저장해 주세요. 입력은 유지됩니다.'}
+            {saveErrorMessage(save.error)}
             {save.error instanceof ApiError && save.error.status === 401 && (
               <a
                 href="/login"
@@ -134,8 +144,8 @@ export function MaterialForm({
             )}
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-4">
-          <Button type="submit" variant="primary" disabled={save.isPending} className="rounded">
+        <div className="flex flex-wrap items-center gap-4 border-t border-paper-rule pt-6">
+          <Button type="submit" variant="primary" disabled={save.isPending}>
             {save.isPending ? (
               <LoaderCircle aria-hidden="true" className="motion-safe:animate-spin" />
             ) : (

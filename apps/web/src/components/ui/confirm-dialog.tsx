@@ -54,11 +54,7 @@ export function ConfirmDialog({
         <Button autoFocus disabled={busy} onClick={onCancel}>
           취소
         </Button>
-        <Button
-          disabled={busy || confirmDisabled}
-          onClick={onConfirm}
-          className="border-status-error text-status-error"
-        >
+        <Button disabled={busy || confirmDisabled} onClick={onConfirm} variant="destructive">
           {busy ? '삭제 중…' : '삭제 확인'}
         </Button>
       </div>

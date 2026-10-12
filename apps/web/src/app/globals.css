@@ -1,23 +1,24 @@
 @import 'tailwindcss';
 
-/* ADR-0006의 semantic token 중 현재 화면이 쓰는 것과, ADR-0006이 scaffold에서 값을 고정하라고
-   요구하는 상태 ramp만 둔다. text-placeholder·decoration-faint·action-pressed는 해당 control을
-   만들 때 추가한다. 실제 화면의 대비·접근성은 Playwright/axe 여정에서 확인한다. */
+/* ADR-0006의 semantic token 중 현재 화면에서 쓰는 값만 둔다.
+   실제 화면의 대비·접근성은 Playwright/axe 여정에서 확인한다. */
 @theme {
-  --color-canvas: #f6f5f4;
+  --color-canvas: #f8f7f2;
   --color-surface: #ffffff;
-  --color-text-primary: #000000;
-  --color-text-secondary: #31302e;
-  --color-text-muted: #615d59;
-  --color-border-subtle: #e6e6e6;
-  --color-action-primary: #0075de;
-  --color-focus: #0075de;
+  --color-text-primary: #292e28;
+  --color-text-secondary: #454a41;
+  --color-text-muted: #62665d;
+  --color-text-placeholder: #62665d;
+  --color-border-subtle: #dcded5;
+  --color-action-primary: #536047;
+  --color-action-pressed: #292e28;
+  --color-focus: #536047;
   --color-status-error: #a12622;
   --color-status-warning: #795000;
   --color-status-success: #21633b;
   --color-status-destructive: #a12622;
 
-  /* 로그인·자료함·공통 헤더의 종이색 팔레트. 검색·읽기 본문 토큰은 유지한다. */
+  /* 로그인과 제품 화면은 같은 종이색 팔레트를 공유한다. */
   --color-paper-canvas: #f8f7f2;
   --color-paper-ink: #292e28;
   --color-paper-muted: #62665d;

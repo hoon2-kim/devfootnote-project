@@ -11,7 +11,7 @@ async function signIn(page: Page) {
 
 test.beforeEach(async ({ auth }) => {
   await auth.pool.query(
-    'truncate auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents',
+    'truncate answer_call_attempts, answer_requests, usage_answer_consents, indexing_embedding_vectors, usage_embedding_call_receipts, auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents, indexing_embedding_attempts, indexing_embedding_works, indexing_embedding_activations, indexing_activation_receipts, usage_embedding_consents, usage_embedding_budgets, usage_embedding_reservations',
   );
   auth.setSubject(GOOGLE_SUBJECT_A);
   auth.setGoogleFailure(undefined);

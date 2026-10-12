@@ -6,6 +6,22 @@ for (const width of [320, 768, 1280]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: '나의 기록에, 나의 각주를' })).toBeVisible();
+    const logo = page.getByRole('img', { name: 'devfootnote', exact: true });
+
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute('src', '/brand/devfootnote-stacked.svg');
+    await expect
+      .poll(() =>
+        logo.evaluate((image) => image instanceof HTMLImageElement && image.naturalWidth > 0),
+      )
+      .toBe(true);
+    const icon = page.locator('link[rel="icon"]');
+
+    await expect(icon).toHaveAttribute('href', '/brand/devfootnote-symbol.svg');
+    const iconResponse = await page.request.get('/brand/devfootnote-symbol.svg');
+
+    expect(iconResponse.ok()).toBe(true);
+    expect(iconResponse.headers()['content-type']).toContain('image/svg+xml');
     const login = page.getByRole('link', { name: '구글 로그인', exact: true });
 
     await expect(login.locator('img')).toBeVisible();

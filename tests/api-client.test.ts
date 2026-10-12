@@ -4,6 +4,13 @@ import {
   getMe,
   logout,
   refreshAuthentication,
+  searchSemanticMaterials,
+  activateCurrentEmbeddings,
+  revokeEmbeddingConsent,
+  generateAnswer,
+  grantAnswerConsent,
+  revokeAnswerConsent,
+  type ActivateEmbeddingsDto,
 } from '../packages/api-client/src/generated/index';
 import {
   createBrowserApiClient,
@@ -45,6 +52,102 @@ function browserTransport(handler: (request: Request) => Response | Promise<Resp
 afterEach(() => vi.unstubAllGlobals());
 
 describe('브라우저 생성 SDK의 CSRF transport', () => {
+  it('답변 생성·동의·철회는 refresh 후에도 원래 본문으로 한 번만 재전송한다', async () => {
+    const bodies = new Map<string, unknown[]>();
+
+    browserTransport(async (request) => {
+      if (request.url.endsWith('/csrf')) {
+        return csrfResponse();
+      }
+
+      if (request.url.endsWith('/refresh')) {
+        return new Response(null, { status: 204 });
+      }
+
+      const sent = bodies.get(request.url) ?? [];
+
+      sent.push(await request.json());
+      bodies.set(request.url, sent);
+
+      return sent.length === 1
+        ? new Response(null, { status: 401 })
+        : Response.json({ success: true, data: {} });
+    });
+    const client = createBrowserApiClient();
+    const answer = {
+      requestId: '5b9bce91-fbd4-4f71-a76a-7052fd90a484',
+      question: '자료에 나온 재시도 방법은?',
+      evidence: [],
+    };
+    const consent = {
+      expectedConsentEpoch: 0,
+      policyFingerprint: 'fixture',
+      accepted: true as const,
+    };
+    const revoke = { expectedConsentEpoch: 1 };
+
+    expect((await generateAnswer({ client, body: answer })).response?.status).toBe(200);
+    expect((await grantAnswerConsent({ client, body: consent })).response?.status).toBe(200);
+    expect((await revokeAnswerConsent({ client, body: revoke })).response?.status).toBe(200);
+    expect(bodies.get(`${origin}/api/v1/answers`)).toEqual([answer, answer]);
+    expect(bodies.get(`${origin}/api/v1/answers/consent`)).toEqual([consent, consent]);
+    expect(bodies.get(`${origin}/api/v1/answers/consent/revoke`)).toEqual([revoke, revoke]);
+  });
+
+  it('의미 검색·활성화·철회의 401은 같은 요청 ID와 동의 epoch로 한 번만 재전송한다', async () => {
+    const bodies = new Map<string, unknown[]>();
+    const requests = browserTransport(async (request) => {
+      if (request.url.endsWith('/csrf')) {
+        return csrfResponse();
+      }
+
+      if (request.url.endsWith('/refresh')) {
+        return new Response(null, { status: 204 });
+      }
+
+      const sent = bodies.get(request.url) ?? [];
+
+      sent.push(await request.json());
+      bodies.set(request.url, sent);
+
+      return sent.length === 1
+        ? new Response(null, { status: 401 })
+        : Response.json({ success: true, data: {} });
+    });
+    const client = createBrowserApiClient();
+    const search = {
+      q: '재시도',
+      mode: 'hybrid' as const,
+      requestId: '5b9bce91-fbd4-4f71-a76a-7052fd90a482',
+    };
+    const activation: ActivateEmbeddingsDto = {
+      requestId: '5b9bce91-fbd4-4f71-a76a-7052fd90a483',
+      configFingerprint: 'fixture',
+      policyVersion: 'fixture',
+      expectedConsentEpoch: 0,
+      accepted: true,
+      targets: [],
+    };
+
+    expect((await searchSemanticMaterials({ client, body: search })).response?.status).toBe(200);
+    expect((await activateCurrentEmbeddings({ client, body: activation })).response?.status).toBe(
+      200,
+    );
+    const revoke = { expectedConsentEpoch: 1 };
+
+    expect((await revokeEmbeddingConsent({ client, body: revoke })).response?.status).toBe(200);
+    expect(bodies.get(`${origin}/api/v1/search/semantic`)).toEqual([search, search]);
+    expect(bodies.get(`${origin}/api/v1/indexing/embedding/activations`)).toEqual([
+      activation,
+      activation,
+    ]);
+    expect(bodies.get(`${origin}/api/v1/indexing/embedding/consent/revoke`)).toEqual([
+      revoke,
+      revoke,
+    ]);
+    expect(requests.filter((request) => request.url.endsWith('/refresh'))).toHaveLength(3);
+  });
+
   it('최종 인증 실패는 이미 진행 중인 보호 요청의 늦은 성공도 폐기한다', async () => {
     let release!: (response: Response) => void;
     const late = new Promise<Response>((resolve) => {
@@ -98,9 +201,9 @@ describe('브라우저 생성 SDK의 CSRF transport', () => {
       expect.objectContaining({ status: 0, code: undefined }),
     );
   });
-  it.each([401, 204])(
-    'refresh %s 이후 최종 401은 인증 종료를 한 번 알리고 새 요청을 막는다',
-    async (status) => {
+  it.each([401, 204].map((status) => ({ status })))(
+    '토큰 갱신 응답이 $status이고 최종 응답이 401이면 인증 종료를 한 번 알리고 새 요청을 막는다',
+    async ({ status }) => {
       const terminal = vi.fn();
       const requests = browserTransport((request) =>
         request.url.endsWith('/csrf')
@@ -121,17 +224,20 @@ describe('브라우저 생성 SDK의 CSRF transport', () => {
     },
   );
 
-  it.each([403, 503])('refresh %s는 인증 종료 신호를 만들지 않는다', async (status) => {
-    const terminal = vi.fn();
+  it.each([403, 503].map((status) => ({ status })))(
+    '토큰 갱신이 $status로 실패해도 인증 종료를 알리지 않는다',
+    async ({ status }) => {
+      const terminal = vi.fn();
 
-    browserTransport((request) =>
-      request.url.endsWith('/csrf')
-        ? csrfResponse()
-        : new Response(null, { status: request.url.endsWith('/refresh') ? status : 401 }),
-    );
-    await getMe({ client: createBrowserApiClient({ onTerminalAuth: terminal }) });
-    expect(terminal).not.toHaveBeenCalled();
-  });
+      browserTransport((request) =>
+        request.url.endsWith('/csrf')
+          ? csrfResponse()
+          : new Response(null, { status: request.url.endsWith('/refresh') ? status : 401 }),
+      );
+      await getMe({ client: createBrowserApiClient({ onTerminalAuth: terminal }) });
+      expect(terminal).not.toHaveBeenCalled();
+    },
+  );
 
   it('자료 등록의 401은 같은 body와 멱등 key로 한 번만 재전송한다', async () => {
     const bodies: unknown[] = [];
@@ -198,21 +304,24 @@ describe('브라우저 생성 SDK의 CSRF transport', () => {
     expect(reads).toBe(4);
   });
 
-  it.each([401, 403, 503])('재발급 %s는 재시도 없이 해당 실패로 전달한다', async (status) => {
-    const requests = browserTransport((request) =>
-      request.url.endsWith('/csrf')
-        ? csrfResponse()
-        : Response.json(
-            { success: false },
-            { status: request.url.endsWith('/refresh') ? status : 401 },
-          ),
-    );
-    const result = await getMe({ client: createBrowserApiClient() });
+  it.each([401, 403, 503].map((status) => ({ status })))(
+    '토큰 재발급이 $status로 실패하면 재시도 없이 오류를 전달한다',
+    async ({ status }) => {
+      const requests = browserTransport((request) =>
+        request.url.endsWith('/csrf')
+          ? csrfResponse()
+          : Response.json(
+              { success: false },
+              { status: request.url.endsWith('/refresh') ? status : 401 },
+            ),
+      );
+      const result = await getMe({ client: createBrowserApiClient() });
 
-    expect(result.error).toMatchObject({ status });
-    expect(requests.filter((request) => request.url.endsWith('/refresh'))).toHaveLength(1);
-    expect(requests.filter((request) => request.url.endsWith('/me'))).toHaveLength(1);
-  });
+      expect(result.error).toMatchObject({ status });
+      expect(requests.filter((request) => request.url.endsWith('/refresh'))).toHaveLength(1);
+      expect(requests.filter((request) => request.url.endsWith('/me'))).toHaveLength(1);
+    },
+  );
 
   it('재발급 network 실패는 로그인 만료로 바꾸지 않는다', async () => {
     browserTransport((request) => {
@@ -517,9 +626,12 @@ describe('브라우저 생성 SDK의 CSRF transport', () => {
     expect(requests.filter((request) => request.method === 'GET')).toHaveLength(2);
   });
 
-  it.each(['http', 'network'])(
-    'CSRF 발급 %s 실패 시 mutation을 보내지 않고 다음 명시적 요청에서 재확인한다',
-    async (failure) => {
+  it.each([
+    { failure: 'http', reason: 'HTTP 오류' },
+    { failure: 'network', reason: '네트워크 오류' },
+  ])(
+    'CSRF 토큰 발급 중 $reason 발생 시 변경 요청을 보내지 않고 다음 명시적 요청에서 재확인한다',
+    async ({ failure }) => {
       let fail = true;
       const requests = browserTransport((request) => {
         if (request.method === 'POST') {

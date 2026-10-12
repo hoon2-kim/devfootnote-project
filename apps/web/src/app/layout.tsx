@@ -7,6 +7,9 @@ import { ApiProvider } from '../lib/api-provider';
 export const metadata: Metadata = {
   title: 'devfootnote',
   description: '개발 메모와 근거 자료를 위한 개인 자료함',
+  icons: {
+    icon: { url: '/brand/devfootnote-symbol.svg', type: 'image/svg+xml', sizes: 'any' },
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

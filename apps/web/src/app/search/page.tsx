@@ -5,7 +5,11 @@ import { parsePage } from '../../lib/pagination';
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[]; page?: string | string[] }>;
+  searchParams: Promise<{
+    q?: string | string[];
+    page?: string | string[];
+    mode?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
   const query =
@@ -15,7 +19,11 @@ export default async function SearchPage({
 
   return (
     <AuthBoundary>
-      <SearchScreen query={query} page={parsePage(params.page)} />
+      <SearchScreen
+        query={query}
+        page={parsePage(params.page)}
+        mode={params.mode === 'vector' || params.mode === 'hybrid' ? params.mode : 'keyword'}
+      />
     </AuthBoundary>
   );
 }

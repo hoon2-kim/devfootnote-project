@@ -93,7 +93,12 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     );
   }
 
-  if (session.isError) {
+  // 최초 확인·접근 거부는 화면을 막되 일시적인 재조회 실패가 기존 초안을 지우지 않게 한다.
+  const transientError =
+    session.error instanceof ApiError &&
+    (session.error.status === 0 || session.error.status >= 500);
+
+  if (!session.data || (session.isError && !transientError)) {
     return (
       <main className="mx-auto flex min-h-svh w-full max-w-lg flex-col justify-center px-4 py-12">
         <div className="mb-8 text-center">
@@ -133,7 +138,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
 
   return (
     <OwnerContext.Provider key={session.data.ownerId} value={session.data.ownerId}>
-      <div>
+      <div className="min-h-svh bg-canvas">
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-10 focus:rounded-lg focus:bg-surface focus:p-4"
@@ -141,6 +146,23 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
           본문으로 건너뛰기
         </a>
         <AuthHeader signingOut={signOut.isPending} onSignOut={() => signOut.mutate()} />
+        {session.isError && (
+          <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-8">
+            <div className="rounded-lg border border-border-subtle bg-surface p-4">
+              <p role="alert" className="text-sm leading-6 text-text-secondary">
+                로그인 상태를 다시 확인하지 못했습니다. 작성 중인 내용은 유지됩니다.
+              </p>
+              <Button
+                type="button"
+                disabled={session.isFetching}
+                onClick={() => void session.refetch()}
+                className="mt-3"
+              >
+                {session.isFetching ? '확인 중…' : '로그인 상태 다시 확인'}
+              </Button>
+            </div>
+          </div>
+        )}
         {signOut.isError && (
           <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-8">
             <p

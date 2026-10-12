@@ -1,7 +1,8 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { listMaterials } from '@devfootnote/api-client';
 import { unwrapApiResult, type createBrowserApiClient } from '../../lib/api-client';
-import { searchKeys } from '../search/search-queries';
+import { searchKeys } from '../search';
+import { embeddingKeys } from '../indexing';
 
 // private/owner 접두사는 AuthBoundary의 계정 전환 정리 기준이다. 모든 자료 key에서 유지한다.
 export const materialKeys = {
@@ -16,6 +17,7 @@ export async function invalidateMaterialCollections(queryClient: QueryClient, ow
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: materialKeys.lists(ownerId) }),
     queryClient.invalidateQueries({ queryKey: searchKeys.all(ownerId) }),
+    queryClient.invalidateQueries({ queryKey: embeddingKeys.all(ownerId) }),
   ]);
 }
 

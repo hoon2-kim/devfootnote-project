@@ -18,8 +18,8 @@ export default async function LoginPage({
     <div
       className={`${gowunBatang.className} flex min-h-svh flex-col bg-paper-canvas text-paper-ink`}
     >
-      <header className="mx-6 flex min-h-20 items-center justify-between gap-6 border-b border-paper-rule sm:mx-12 sm:min-h-24 lg:mx-20">
-        <Wordmark />
+      <header className="mx-6 flex items-center justify-center border-b border-paper-rule py-5 sm:mx-12 sm:py-6 lg:mx-20">
+        <Wordmark variant="stacked" />
       </header>
 
       <main className="mx-auto grid w-full max-w-[1440px] flex-1 content-center px-6 py-8 sm:px-12 sm:py-16 md:grid-cols-[1.2fr_1fr] lg:px-20 lg:py-24">

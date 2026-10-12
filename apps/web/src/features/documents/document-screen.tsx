@@ -14,6 +14,8 @@ import { SafeMarkdown } from './safe-markdown';
 import { DocumentEditor } from './document-editor';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { materialKeys, invalidateMaterialCollections } from '../library';
+import { gowunBatang } from '../../lib/fonts';
+import { AnswerPanel } from '../answers';
 
 export function DocumentScreen({
   materialId,
@@ -75,9 +77,9 @@ export function DocumentScreen({
     <main
       id="main-content"
       tabIndex={-1}
-      className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8 sm:py-12"
+      className="mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 sm:py-12"
     >
-      <Button asChild variant="ghost">
+      <Button asChild variant="ghost" className="-ml-4 text-text-muted">
         <Link href="/library">
           <ArrowLeft aria-hidden="true" />
           자료함으로
@@ -136,33 +138,38 @@ export function DocumentScreen({
               검색 이후 자료가 변경되어 최신 버전을 표시합니다.
             </p>
           )}
-          <header className="mt-8 mb-8">
-            <h1 className="text-[32px] leading-tight font-semibold tracking-tight">
-              {material.title || '제목 없는 자료'}
-            </h1>
-            <p className="mt-3 text-sm text-text-muted">
-              버전 {material.revision} ·{' '}
-              <time dateTime={material.updatedAt}>
-                {new Date(material.updatedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
-              </time>{' '}
-              수정
-            </p>
-          </header>
-          <div className="mb-6 flex gap-3">
-            <Button disabled={editing} onClick={() => setEditing(true)}>
-              자료 수정
-            </Button>
-            <Button
-              disabled={editing}
-              onClick={() => {
-                deleteRequest.current = undefined;
-                remove.reset();
-                setRecoveryFailed(false);
-                setConfirming(true);
-              }}
-            >
-              자료 삭제
-            </Button>
+          <div className="mt-6 mb-10 flex flex-wrap items-end justify-between gap-6 border-b border-paper-rule pb-8">
+            <header className="min-w-0 flex-1 basis-full lg:basis-0">
+              <h1
+                className={`${gowunBatang.className} text-[32px] leading-snug tracking-tight sm:text-[40px]`}
+              >
+                {material.title || '제목 없는 자료'}
+              </h1>
+              <p className="mt-3 text-sm text-text-muted">
+                버전 {material.revision} ·{' '}
+                <time dateTime={material.updatedAt}>
+                  {new Date(material.updatedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
+                </time>{' '}
+                수정
+              </p>
+            </header>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={editing} onClick={() => setEditing(true)}>
+                자료 수정
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={editing}
+                onClick={() => {
+                  deleteRequest.current = undefined;
+                  remove.reset();
+                  setRecoveryFailed(false);
+                  setConfirming(true);
+                }}
+              >
+                자료 삭제
+              </Button>
+            </div>
           </div>
           {editing && (
             <DocumentEditor
@@ -219,47 +226,52 @@ export function DocumentScreen({
               </div>
             )}
           </ConfirmDialog>
-          <section
-            aria-labelledby="note-title"
-            className="mb-8 rounded-xl border border-border-subtle bg-surface p-6 sm:p-8"
-          >
-            <h2 id="note-title" className="text-xl font-semibold">
-              나의 메모
-            </h2>
-            <p className="mt-4 whitespace-pre-wrap leading-7 text-text-secondary">
-              {material.note || '남긴 메모가 없습니다.'}
-            </p>
-            {material.context && (
-              <>
-                <h3 className="mt-6 text-base font-semibold">사용 맥락</h3>
-                <p className="mt-2 whitespace-pre-wrap leading-7 text-text-secondary">
-                  {material.context}
-                </p>
-              </>
-            )}
-          </section>
-          <section
-            aria-labelledby="source-title"
-            className="rounded-xl border border-border-subtle bg-surface p-6 sm:p-8"
-          >
-            <h2 id="source-title" className="text-xl font-semibold">
-              저장한 원문
-            </h2>
-            {material.sourceUrl && (
-              <a
-                href={material.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex min-h-11 max-w-full items-center gap-2 text-sm text-action-primary underline"
-              >
-                <ExternalLink aria-hidden="true" className="size-4 shrink-0" />
-                <span className="break-all">{material.sourceUrl} (새 탭)</span>
-              </a>
-            )}
-            <div className="mt-6 border-t border-border-subtle pt-6">
-              <SafeMarkdown body={material.body} />
-            </div>
-          </section>
+          <div className="grid items-start gap-8 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-12">
+            <section
+              aria-labelledby="note-title"
+              className="min-w-0 border-t-2 border-paper-accent pt-5"
+            >
+              <h2 id="note-title" className={`${gowunBatang.className} scroll-mt-8 text-2xl`}>
+                나의 메모
+              </h2>
+              <p className="mt-4 whitespace-pre-wrap leading-7 text-text-secondary">
+                {material.note || '남긴 메모가 없습니다.'}
+              </p>
+              {material.context && (
+                <>
+                  <h3 className="mt-8 border-t border-paper-rule pt-5 text-sm font-medium">
+                    사용 맥락
+                  </h3>
+                  <p className="mt-2 whitespace-pre-wrap leading-7 text-text-secondary">
+                    {material.context}
+                  </p>
+                </>
+              )}
+            </section>
+            <section
+              aria-labelledby="source-title"
+              className="min-w-0 border border-paper-rule bg-surface p-5 sm:p-8 lg:p-10"
+            >
+              <h2 id="source-title" className={`${gowunBatang.className} scroll-mt-8 text-2xl`}>
+                저장한 원문
+              </h2>
+              {material.sourceUrl && (
+                <a
+                  href={material.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex min-h-11 max-w-full items-center gap-2 text-sm text-action-primary underline"
+                >
+                  <ExternalLink aria-hidden="true" className="size-4 shrink-0" />
+                  <span className="break-all">{material.sourceUrl} (새 탭)</span>
+                </a>
+              )}
+              <div className="mt-6 border-t border-border-subtle pt-6">
+                <SafeMarkdown body={material.body} />
+              </div>
+            </section>
+          </div>
+          <AnswerPanel key={`${material.id}:${material.revisionId}`} material={material} />
         </>
       )}
     </main>
