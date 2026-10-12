@@ -63,6 +63,19 @@ test('app 이미지: HTTPS 로그인·CSRF·재발급·저장·재시작·DB 장
 
     await page.reload();
     expect((await refresh).status()).toBe(204);
+    const worker = await stack.compose(
+      'exec',
+      '-T',
+      'worker',
+      'node',
+      '-e',
+      'console.log(process.getuid())',
+    );
+
+    expect(worker.stdout.trim()).toBe('1000');
+    await stack.compose('stop', 'redis');
+    // 선택적인 큐가 끊겨도 저장·검색과 DB readiness는 유지한다.
+    expect(await page.evaluate(async () => (await fetch('/api/v1/health/ready')).status)).toBe(200);
     await page.getByRole('button', { name: '새 자료', exact: true }).click();
     await page.getByLabel('제목 (선택)').fill('이미지 재시작 이후에도 남는 자료');
     await page.getByLabel('원문', { exact: true }).fill('Redis와 AI 없이 저장하는 PostgreSQL 근거');

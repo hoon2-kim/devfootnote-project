@@ -12,6 +12,7 @@ services:
       NODE_ENV: ${APP_NODE_ENV:-development}
       DATABASE_URL: postgresql://devfootnote:devfootnote_local_only@postgres:5432/devfootnote
       PORT: 8000
+      REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,6 +50,33 @@ services:
       timeout: 3s
       retries: 10
     stop_grace_period: 15s
+  worker:
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      NODE_ENV: ${APP_NODE_ENV:-development}
+      DATABASE_URL: postgresql://devfootnote:devfootnote_local_only@postgres:5432/devfootnote
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stop_grace_period: 15s
+  redis:
+    image: redis:7.4.7-alpine@sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    ports:
+      - '127.0.0.1:56379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
   postgres:
     image: pgvector/pgvector:0.8.6-pg17-trixie@sha256:724a4041afdb1750446e3f6b5cfa8f3b0ac5a2cf538ddfa6bfee4f94c2fa85c6
     environment:
@@ -66,3 +94,4 @@ services:
       retries: 10
 volumes:
   postgres_data:
+  redis_data:

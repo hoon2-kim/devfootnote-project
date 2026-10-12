@@ -22,6 +22,10 @@ services:
     ports: !override ['127.0.0.1::3000']
   postgres:
     ports: !override ['127.0.0.1::5432']
+  redis:
+    ports: !override ['127.0.0.1::6379']
+  worker:
+    image: devfootnote-worker:phase2-foundation-smoke
   google:
     image: devfootnote-api:phase1-smoke
     command: ['node', '/fixtures/google.mjs']

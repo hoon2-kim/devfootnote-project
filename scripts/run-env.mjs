@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 const [app, mode, ...command] = process.argv.slice(2);
 
-if (!['api', 'web'].includes(app) || !['dev', 'prod'].includes(mode) || !command.length) {
-  throw new Error('실행 대상(api/web), 환경(dev/prod), Node 실행 파일을 지정해 주세요.');
+if (!['api', 'web', 'worker'].includes(app) || !['dev', 'prod'].includes(mode) || !command.length) {
+  throw new Error('실행 대상(api/web/worker), 환경(dev/prod), Node 실행 파일을 지정해 주세요.');
 }
 
 // Next가 CLI 옵션을 NODE_OPTIONS로 전달하므로 env-file 플래그 대신 여기서 읽는다.

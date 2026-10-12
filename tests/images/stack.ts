@@ -124,9 +124,10 @@ export async function startImageStack() {
   }
 
   try {
-    await compose('build', 'api', 'web', 'migration');
+    await compose('build', 'api', 'web', 'worker', 'migration');
     await compose('up', '-d', '--wait', 'postgres', 'google');
     await compose('run', '--rm', 'migration');
+    await compose('up', '-d', '--wait', 'redis', 'worker');
     await compose('up', '-d', '--wait', 'api', 'web');
     await refreshWebPort();
 
