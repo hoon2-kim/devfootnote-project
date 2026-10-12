@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Post, Query, Req } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiForbiddenResponse,
@@ -12,7 +12,12 @@ import { SearchService } from './search.service.js';
 import type { AuthenticatedRequest } from '../auth/index.js';
 import { ApiEnvelope } from '../../common/decorators/api-envelope.decorator.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
-import { SearchQueryDto, SearchResponseDto } from './dto/search.dto.js';
+import {
+  SearchQueryDto,
+  SearchResponseDto,
+  SemanticSearchDto,
+  SemanticSearchResponseDto,
+} from './dto/search.dto.js';
 
 @Controller('search')
 @ApiSecurity('access')
@@ -23,6 +28,18 @@ import { SearchQueryDto, SearchResponseDto } from './dto/search.dto.js';
 @ApiServiceUnavailableResponse({ type: ApiErrorDto })
 export class SearchController {
   constructor(private readonly search: SearchService) {}
+
+  @Post('semantic')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ operationId: 'searchSemanticMaterials' })
+  @ApiEnvelope(SemanticSearchResponseDto)
+  async semantic(
+    @Req() req: AuthenticatedRequest,
+    @Body() input: SemanticSearchDto,
+  ): Promise<SemanticSearchResponseDto> {
+    return SemanticSearchResponseDto.from(await this.search.semantic(req.user.ownerId, input));
+  }
 
   @Get()
   @Header('Cache-Control', 'no-store')

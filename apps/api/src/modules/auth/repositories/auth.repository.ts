@@ -1,18 +1,22 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { TransactionHost, Transactional, Propagation } from '@nestjs-cls/transactional';
 import { logger } from '../../../infrastructure/logging/logger.js';
 import { and, eq, gt, inArray, lt, sql } from 'drizzle-orm';
 import { isDatabaseUnavailable } from '../../../infrastructure/database/database-error.js';
 import { DATABASE, type Database } from '../../../infrastructure/database/database.provider.js';
-import { accounts, oauthStates, refreshTokens } from '../auth.schema.js';
+import type { PostgresTransactionAdapter } from '../../../infrastructure/database/transactions.module.js';
+import { accounts, oauthStates, refreshTokens } from '@devfootnote/db/schema/auth';
 import { AuthError } from '../auth.error.js';
-import { hashToken } from '../services/token.service.js';
-import type { OAuthState, SessionTokens } from '../auth.types.js';
+import type { OAuthState } from '../auth.types.js';
 
 const cleanupBatchSize = 100;
 
 @Injectable()
 export class AuthRepository {
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly transactions: TransactionHost<PostgresTransactionAdapter>,
+  ) {}
 
   // 정리는 insert와 같은 transaction에서 최대 100건만 처리한다. 실패 시 성공으로 응답하지 않는다.
   async saveOAuthState(oauthState: OAuthState) {
@@ -49,50 +53,45 @@ export class AuthRepository {
     return oauthState;
   }
 
-  // token 발급을 callback 으로 받아 같은 transaction 안에서 끝낸다. callback 은 DB handle 을 받지 않는다.
-  async establishSession(
-    issuer: string,
-    subject: string,
-    issue: (ownerId: string) => SessionTokens,
-  ) {
-    return this.persist(() =>
-      this.db.transaction(async (tx) => {
-        // 같은 계정의 첫 로그인이 동시에 와도 하나만 남는다 — 충돌은 무시하고 아래 select 로 승자를 읽는다.
-        await tx.insert(accounts).values({ issuer, subject }).onConflictDoNothing();
-        const [owner] = await tx
-          .select({ id: accounts.id })
-          .from(accounts)
-          .where(and(eq(accounts.issuer, issuer), eq(accounts.subject, subject)));
+  @Transactional(Propagation.Mandatory)
+  async findOrCreateAccount(issuer: string, subject: string) {
+    const tx = this.transactions.tx;
 
-        if (!owner) {
-          throw new AuthError('denied');
-        }
+    // 같은 계정의 첫 로그인이 동시에 와도 하나만 남는다 — 충돌은 무시하고 아래 select 로 승자를 읽는다.
+    await tx.insert(accounts).values({ issuer, subject }).onConflictDoNothing();
+    const [owner] = await tx
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.issuer, issuer), eq(accounts.subject, subject)));
 
-        const tokens = issue(owner.id);
-        const values = {
-          ownerId: owner.id,
-          tokenHash: hashToken(tokens.refresh),
-          createdAt: new Date(),
-          expiresAt: new Date(tokens.refreshExpiresAt * 1000),
-        };
+    if (!owner) {
+      throw new AuthError('denied');
+    }
 
-        const expired = tx
-          .select({ ownerId: refreshTokens.ownerId })
-          .from(refreshTokens)
-          .where(lt(refreshTokens.expiresAt, sql`now()`))
-          .orderBy(refreshTokens.expiresAt)
-          .limit(cleanupBatchSize)
-          .for('update', { skipLocked: true });
+    return owner;
+  }
 
-        await tx.delete(refreshTokens).where(inArray(refreshTokens.ownerId, expired));
-        await tx
-          .insert(refreshTokens)
-          .values(values)
-          .onConflictDoUpdate({ target: refreshTokens.ownerId, set: values });
+  @Transactional(Propagation.Mandatory)
+  async replaceRefresh(values: {
+    ownerId: string;
+    tokenHash: string;
+    createdAt: Date;
+    expiresAt: Date;
+  }) {
+    const tx = this.transactions.tx;
+    const expired = tx
+      .select({ ownerId: refreshTokens.ownerId })
+      .from(refreshTokens)
+      .where(lt(refreshTokens.expiresAt, sql`now()`))
+      .orderBy(refreshTokens.expiresAt)
+      .limit(cleanupBatchSize)
+      .for('update', { skipLocked: true });
 
-        return tokens;
-      }),
-    );
+    await tx.delete(refreshTokens).where(inArray(refreshTokens.ownerId, expired));
+    await tx
+      .insert(refreshTokens)
+      .values(values)
+      .onConflictDoUpdate({ target: refreshTokens.ownerId, set: values });
   }
 
   // 조회 없이 조건부 update 한 번으로 교체한다 — 같은 refresh 로 동시에 들어와도 한 쪽만 1건을 받는다.

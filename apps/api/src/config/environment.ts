@@ -1,11 +1,22 @@
 import type { AuthConfig } from '../modules/auth/index.js';
 import { environmentSchema } from './environment.schema.js';
+import {
+  geminiFreePolicy,
+  geminiFreeAnswerPolicy,
+  type EmbeddingPolicy,
+  type AnswerPolicy,
+} from '@devfootnote/ai';
 
 // message 에 고정 문구와 키 이름만 담는다 — 기동 실패 로그에 그대로 남겨도 안전하다는 표식이다.
 export class EnvironmentError extends Error {}
 
 export function validateEnvironment(env: Record<string, unknown>): {
   port: number;
+  databaseUrl: string;
+  embeddingPolicy: EmbeddingPolicy | null;
+  answerPolicy: AnswerPolicy | null;
+  geminiApiKey?: string;
+  redisUrl?: string;
   auth: AuthConfig;
 } {
   const result = environmentSchema.safeParse(env);
@@ -20,6 +31,13 @@ export function validateEnvironment(env: Record<string, unknown>): {
 
   return {
     port: config.PORT,
+    databaseUrl: config.DATABASE_URL,
+    // 승인된 무료 개발 설정만 사용한다. 실제 호출에는 별도로 owner의 화면 동의가 필요하다.
+    embeddingPolicy: config.GEMINI_API_KEY ? geminiFreePolicy() : null,
+    // 설정 활성화는 동의를 대신하지 않는다. 답변 전송은 별도 동의·예약 후 worker가 수행한다.
+    answerPolicy: config.GEMINI_API_KEY ? geminiFreeAnswerPolicy() : null,
+    geminiApiKey: config.GEMINI_API_KEY,
+    redisUrl: config.REDIS_URL,
     auth: {
       clientId: config.GOOGLE_CLIENT_ID,
       clientSecret: config.GOOGLE_CLIENT_SECRET,

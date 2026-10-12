@@ -28,7 +28,11 @@ export function loginReturnTo(input: unknown): string {
     return '/library';
   }
 
-  const allowed = document ? ['revision'] : url.pathname === '/search' ? ['q', 'page'] : ['page'];
+  const allowed = document
+    ? ['revision']
+    : url.pathname === '/search'
+      ? ['q', 'page', 'mode']
+      : ['page'];
 
   for (const key of url.searchParams.keys()) {
     if (!allowed.includes(key) || url.searchParams.getAll(key).length !== 1) {
@@ -39,8 +43,10 @@ export function loginReturnTo(input: unknown): string {
   const page = url.searchParams.get('page');
   const revision = url.searchParams.get('revision');
   const query = url.searchParams.get('q');
+  const mode = url.searchParams.get('mode');
 
   if (
+    (mode !== null && !['keyword', 'vector', 'hybrid'].includes(mode)) ||
     (page !== null && (!/^\d+$/u.test(page) || Number(page) < 1 || Number(page) > 100000)) ||
     (revision !== null && !new RegExp(`^${uuid}$`, 'i').test(revision)) ||
     (query !== null &&

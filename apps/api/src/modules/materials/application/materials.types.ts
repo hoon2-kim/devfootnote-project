@@ -28,6 +28,8 @@ export interface MaterialMutationResult {
 
 export interface MaterialPage extends PageResult<MaterialSummary> {
   page: number;
+  pageSize: number;
+  totalCount: number;
 }
 
 export interface UpdateMaterialInput extends CreateMaterialInput {
@@ -40,3 +42,28 @@ export interface DeleteMaterialInput {
 }
 
 export type MaterialSearchCandidate = Omit<MaterialDetail, 'createdAt'>;
+
+export interface RankedMaterialReference {
+  materialId: string;
+  revisionId: string;
+  score: number;
+}
+export interface CurrentEmbeddingIntent {
+  title?: string | null;
+  materialId: string;
+  revisionId: string;
+  intentId: string;
+  chunkCount: number;
+}
+
+export interface EmbeddingTarget {
+  materialId: string;
+  revisionId: string;
+}
+
+export interface AnswerEvidenceChunk extends EmbeddingTarget {
+  chunkId: string;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+}

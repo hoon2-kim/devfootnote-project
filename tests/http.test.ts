@@ -24,7 +24,13 @@ import { Public } from '../apps/api/dist/modules/auth/decorators/public.decorato
 import { configureApp } from '../apps/api/dist/configure-app.js';
 import { HealthService } from '../apps/api/dist/modules/health/health.service.js';
 import { logger } from '../apps/api/dist/infrastructure/logging/logger.js';
+import { AuthError } from '../apps/api/dist/modules/auth/index.js';
+import { MaterialsError } from '../apps/api/dist/modules/materials/index.js';
+import { UsageError } from '../apps/api/dist/modules/usage-retention/index.js';
+import { IndexingError } from '../apps/api/dist/modules/indexing/index.js';
 import { getLiveness, getReadiness } from '../packages/api-client/src/generated/index';
+
+let domainFailure: Error;
 
 class QueryDto {
   @IsString()
@@ -51,6 +57,9 @@ class BodyDto {
 @Controller('contract-fixture')
 @Public()
 class FixtureController {
+  @Get('domain') domain() {
+    throw domainFailure;
+  }
   @Get('nested') nested() {
     return { success: false };
   }
@@ -131,6 +140,50 @@ describe('HTTP와 생성 SDK 계약', () => {
     delete process.env.DATABASE_URL;
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each(
+    (
+      [
+        [new AuthError('denied'), 401, 'AUTHENTICATION_REQUIRED', '로그인이 필요합니다.'],
+        [new AuthError('unavailable'), 503, 'SERVICE_UNAVAILABLE', '잠시 후 다시 시도해 주세요.'],
+        [
+          new MaterialsError('revision_conflict'),
+          409,
+          'MATERIAL_REVISION_CONFLICT',
+          '자료가 변경되었습니다. 최신 내용을 확인해 주세요.',
+        ],
+        [
+          new UsageError('budget_exhausted'),
+          409,
+          'EMBEDDING_BUDGET_EXHAUSTED',
+          '사용 가능한 처리 예산이 부족합니다.',
+        ],
+        [
+          new IndexingError('consent_required'),
+          403,
+          'EMBEDDING_CONSENT_REQUIRED',
+          '외부 전송에 대한 명시적 동의가 필요합니다.',
+        ],
+      ] as const
+    ).map(([failure, status, error, message]) => ({ failure, status, error, message })),
+  )(
+    '업무 오류($error)는 HTTP $status 응답으로 변환하고 내부 정보는 숨긴다',
+    async ({ failure, status, error, message }) => {
+      domainFailure = failure;
+      domainFailure.message = 'PRIVATE_DOMAIN_DETAIL';
+      const errorLog = vi.spyOn(logger, 'error').mockImplementation(() => {});
+      const warnLog = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+      await request(app.getHttpServer()).get('/api/v1/contract-fixture/domain').expect(status, {
+        success: false,
+        error,
+        message,
+      });
+      expect(JSON.stringify([errorLog.mock.calls, warnLog.mock.calls])).not.toContain(
+        'PRIVATE_DOMAIN_DETAIL',
+      );
+    },
+  );
 
   it('인증 응답은 Express 경로 대소문자 처리와 관계없이 캐시하지 않는다', async () => {
     for (const path of ['/api/v1/auth/csrf', '/API/v1/AUTH/csrf']) {
@@ -229,6 +282,73 @@ describe('HTTP와 생성 SDK 계약', () => {
       success: false,
       error: 'CLIENT_ERROR',
       message: '요청을 처리할 수 없습니다.',
+    });
+  });
+  it.each([
+    {
+      label: '본문 크기 초과',
+      contentType: 'application/json',
+      contentEncoding: 'identity',
+      body: JSON.stringify({ child: { name: `PRIVATE_INPUT_${'x'.repeat(110_000)}` } }),
+      status: 413,
+    },
+    {
+      label: '지원하지 않는 charset',
+      contentType: 'application/json; charset=iso-8859-1',
+      contentEncoding: 'identity',
+      body: JSON.stringify({ child: { name: 'PRIVATE_INPUT' } }),
+      status: 415,
+    },
+    {
+      label: '지원하지 않는 content encoding',
+      contentType: 'application/json',
+      contentEncoding: 'unsupported-fixture',
+      body: JSON.stringify({ child: { name: 'PRIVATE_INPUT' } }),
+      status: 415,
+    },
+    {
+      label: '잘못된 JSON',
+      contentType: 'application/json',
+      contentEncoding: 'identity',
+      body: '{"PRIVATE_INPUT":',
+      status: 400,
+    },
+  ])('실제 본문 파서의 $label 오류는 정제된 $status이다', async (fixture) => {
+    const errorLog = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const warnLog = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const csrf = await request(app.getHttpServer()).get('/api/v1/auth/csrf').expect(200);
+    const cookies = csrf.get('Set-Cookie') ?? [];
+    const result = await request(app.getHttpServer())
+      .post('/api/v1/contract-fixture/nested-validate')
+      .set('Origin', 'http://127.0.0.1:3000')
+      .set('X-CSRF-Token', csrf.body.data.csrfToken)
+      .set(
+        'Cookie',
+        cookies.map((cookie) => cookie.split(';')[0] ?? ''),
+      )
+      .set('Content-Type', fixture.contentType)
+      .set('Content-Encoding', fixture.contentEncoding)
+      .send(fixture.body)
+      .expect(fixture.status);
+
+    expect(result.body).toEqual({
+      success: false,
+      error: fixture.status === 400 ? 'VALIDATION_ERROR' : 'CLIENT_ERROR',
+      message: fixture.status === 400 ? '요청을 확인해 주세요.' : '요청을 처리할 수 없습니다.',
+    });
+    expect(errorLog).not.toHaveBeenCalled();
+    expect(JSON.stringify([result.body, warnLog.mock.calls])).not.toContain('PRIVATE_INPUT');
+  });
+  it.each([
+    { status: 400, statusCode: 400, expose: true },
+    { status: 400, statusCode: 400, expose: true, type: 'entity.too.large' },
+  ])('일반 오류의 status 속성만으로 서버 오류를 요청 오류로 바꾸지 않는다', async (properties) => {
+    domainFailure = Object.assign(new Error('PRIVATE_SERVER_ERROR'), properties);
+
+    await request(app.getHttpServer()).get('/api/v1/contract-fixture/domain').expect(500, {
+      success: false,
+      error: 'INTERNAL_SERVER_ERROR',
+      message: '요청을 처리하지 못했습니다.',
     });
   });
   it('메시지를 등록하지 않은 제약과 중첩 DTO 오류도 필드를 잃지 않는다', async () => {

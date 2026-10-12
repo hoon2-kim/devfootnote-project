@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
-import type { PageResult } from '../../../common/pagination/page-result.js';
-import { isDatabaseUnavailable } from '../../../infrastructure/database/database-error.js';
+import { and, asc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import { TransactionHost, Transactional, Propagation } from '@nestjs-cls/transactional';
+import type { PostgresTransactionAdapter } from '../../../infrastructure/database/transactions.module.js';
 import { DATABASE, type Database } from '../../../infrastructure/database/database.provider.js';
-import { logger } from '../../../infrastructure/logging/logger.js';
 import {
   embeddingIntents,
   materialChunks,
@@ -12,11 +11,10 @@ import {
   materialReceipts,
   materialRevisions,
   materials,
-} from './materials.schema.js';
+} from '@devfootnote/db/schema/materials';
 import {
-  type MaterialDetail,
-  type MaterialSummary,
   type MaterialMutationResult,
+  type EmbeddingTarget,
 } from '../application/materials.types.js';
 import { MaterialsError } from '../domain/materials.error.js';
 import type { PreparedMaterial } from '../domain/material.types.js';
@@ -26,20 +24,7 @@ import {
   type DeleteMaterialWrite,
   type MaterialsRepository,
 } from '../application/ports/materials.repository.js';
-
-const summaryColumns = {
-  id: materials.id,
-  revisionId: materialRevisions.id,
-  revision: materialRevisions.revision,
-  title: materialRevisions.title,
-  createdAt: materials.createdAt,
-  updatedAt: materials.updatedAt,
-};
-const currentRevision = and(
-  eq(materials.ownerId, materialRevisions.ownerId),
-  eq(materials.id, materialRevisions.materialId),
-  eq(materials.currentRevisionId, materialRevisions.id),
-);
+import { withMaterialsErrorBoundary } from './materials-persistence-error.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -51,7 +36,105 @@ class ReceiptRace extends Error {}
  */
 @Injectable()
 export class DrizzleMaterialsRepository implements MaterialsRepository {
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly transactions: TransactionHost<PostgresTransactionAdapter>,
+  ) {}
+
+  private embeddingIntentQuery() {
+    return this.transactions.tx
+      .select({
+        materialId: materials.id,
+        revisionId: materials.currentRevisionId,
+        intentId: embeddingIntents.id,
+        title: sql<string | null>`(select ${materialRevisions.title} from ${materialRevisions}
+          where ${materialRevisions.ownerId} = ${materials.ownerId}
+            and ${materialRevisions.id} = ${materials.currentRevisionId})`,
+        chunkCount: sql<number>`(select count(*)::int from ${materialChunks}
+        where ${materialChunks.ownerId} = ${materials.ownerId}
+          and ${materialChunks.revisionId} = ${materials.currentRevisionId})`,
+      })
+      .from(materials)
+      .innerJoin(
+        embeddingIntents,
+        and(
+          eq(embeddingIntents.ownerId, materials.ownerId),
+          eq(embeddingIntents.materialId, materials.id),
+          eq(embeddingIntents.revisionId, materials.currentRevisionId),
+        ),
+      )
+      .$dynamic();
+  }
+
+  async currentEmbeddingIntents(ownerId: string, afterId: string | undefined, limit: number) {
+    return this.embeddingIntentQuery()
+      .where(
+        and(
+          eq(materials.ownerId, ownerId),
+          isNull(materials.deletedAt),
+          afterId ? gt(materials.id, afterId) : undefined,
+        ),
+      )
+      .orderBy(asc(materials.id))
+      .limit(limit);
+  }
+
+  @Transactional(Propagation.Mandatory)
+  async lockAnswerEvidence(ownerId: string, targets: EmbeddingTarget[]) {
+    const locked = await this.lockEmbeddingIntents(ownerId, targets);
+
+    if (
+      locked.length !== targets.length ||
+      locked.some(
+        (row) =>
+          !targets.some(
+            (target) =>
+              target.materialId === row.materialId && target.revisionId === row.revisionId,
+          ),
+      )
+    ) {
+      throw new MaterialsError('revision_conflict');
+    }
+
+    return this.transactions.tx
+      .select({
+        materialId: materialChunks.materialId,
+        revisionId: materialChunks.revisionId,
+        chunkId: materialChunks.id,
+        text: materialChunks.text,
+        startOffset: materialChunks.startOffset,
+        endOffset: materialChunks.endOffset,
+      })
+      .from(materialChunks)
+      .where(
+        and(
+          eq(materialChunks.ownerId, ownerId),
+          inArray(
+            materialChunks.revisionId,
+            targets.map((target) => target.revisionId),
+          ),
+        ),
+      )
+      .orderBy(asc(materialChunks.materialId), asc(materialChunks.ordinal));
+  }
+
+  @Transactional(Propagation.Mandatory)
+  async lockEmbeddingIntents(ownerId: string, targets: EmbeddingTarget[]) {
+    // 수정·삭제와 같은 material 행을 잠근다. intent만 잠그면 current revision이 바뀔 수 있다.
+    return this.embeddingIntentQuery()
+      .where(
+        and(
+          eq(materials.ownerId, ownerId),
+          isNull(materials.deletedAt),
+          inArray(
+            materials.id,
+            targets.map((target) => target.materialId),
+          ),
+        ),
+      )
+      .orderBy(asc(materials.id))
+      .for('update', { of: materials });
+  }
 
   async create({ ownerId, idempotencyKey: key, prepared }: CreateMaterialWrite) {
     return this.writeWithReceipt(ownerId, key, prepared.fingerprint, () =>
@@ -316,7 +399,7 @@ export class DrizzleMaterialsRepository implements MaterialsRepository {
     fingerprint: string,
     operation: () => Promise<MaterialMutationResult>,
   ): Promise<MaterialMutationResult> {
-    return this.persist(async () => {
+    return withMaterialsErrorBoundary(async () => {
       try {
         return await operation();
       } catch (error) {
@@ -344,119 +427,5 @@ export class DrizzleMaterialsRepository implements MaterialsRepository {
 
       return { id: receipt.materialId, revisionId: receipt.revisionId };
     });
-  }
-
-  async list(
-    ownerId: string,
-    page: number,
-    pageSize: number,
-  ): Promise<PageResult<MaterialSummary>> {
-    return this.persist(async () => {
-      const rows = await this.db
-        .select(summaryColumns)
-        .from(materials)
-        .innerJoin(materialRevisions, currentRevision)
-        .where(and(eq(materials.ownerId, ownerId), isNull(materials.deletedAt)))
-        .orderBy(desc(materials.updatedAt), desc(materials.id))
-        .limit(pageSize + 1)
-        .offset((page - 1) * pageSize);
-
-      return { items: rows.slice(0, pageSize), hasNext: rows.length > pageSize };
-    });
-  }
-
-  async read(ownerId: string, id: string): Promise<MaterialDetail> {
-    return this.persist(async () => {
-      const [material] = await this.db
-        .select({
-          ...summaryColumns,
-          body: materialRevisions.body,
-          note: materialRevisions.note,
-          context: materialRevisions.context,
-          sourceUrl: materialRevisions.sourceUrl,
-        })
-        .from(materials)
-        .innerJoin(materialRevisions, currentRevision)
-        .where(
-          and(eq(materials.ownerId, ownerId), eq(materials.id, id), isNull(materials.deletedAt)),
-        );
-
-      if (!material) {
-        throw new MaterialsError('not_found');
-      }
-
-      return material;
-    });
-  }
-
-  async keywordCandidates(ownerId: string, query: string, page: number, pageSize: number) {
-    const tokens = query.split(/\s+/u);
-    // %와 _도 검색어 자체로 취급한다. LIKE pattern도 반드시 parameter로 바인딩한다.
-    const contains = (token: string) => `%${token.replace(/[\\%_]/g, '\\$&')}%`;
-    // 저장된 vector를 사용해 스캔 중 본문을 매번 다시 토큰화하지 않는다.
-    const vector = materialKeywords.searchVector;
-    const tsquery = sql`plainto_tsquery('simple', ${query})`;
-    const fullText = sql`${vector} @@ ${tsquery}`;
-    // FTS가 놓치는 한글 부분 문자열도 찾는다. 모든 토큰 일치이며 짧은 질의도 제외하지 않는다.
-    const substrings: SQL[] = tokens.map(
-      (token) => sql`${materialKeywords.normalizedText} like ${contains(token)}`,
-    );
-    const score =
-      sql<number>`ts_rank_cd(${vector}, ${tsquery}) + similarity(${materialKeywords.normalizedText}, ${query})`.mapWith(
-        Number,
-      );
-
-    return this.persist(async () => {
-      const rows = await this.db
-        .select({
-          ...summaryColumns,
-          body: materialRevisions.body,
-          note: materialRevisions.note,
-          context: materialRevisions.context,
-          sourceUrl: materialRevisions.sourceUrl,
-        })
-        .from(materials)
-        .innerJoin(materialRevisions, currentRevision)
-        .innerJoin(
-          materialKeywords,
-          and(
-            eq(materialKeywords.ownerId, materials.ownerId),
-            eq(materialKeywords.materialId, materials.id),
-            eq(materialKeywords.revisionId, materials.currentRevisionId),
-          ),
-        )
-        .where(
-          and(
-            eq(materials.ownerId, ownerId),
-            isNull(materials.deletedAt),
-            sql`(${fullText} or (${and(...substrings)}))`,
-          ),
-        )
-        .orderBy(desc(score), desc(materials.updatedAt), desc(materials.id))
-        .limit(pageSize + 1)
-        .offset((page - 1) * pageSize);
-
-      return { items: rows.slice(0, pageSize), hasNext: rows.length > pageSize };
-    });
-  }
-
-  private async persist<T>(operation: () => Promise<T>): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      if (error instanceof MaterialsError) {
-        throw error;
-      }
-
-      if (isDatabaseUnavailable(error)) {
-        logger.error('자료 저장소에 일시적으로 접근할 수 없습니다.');
-
-        throw new MaterialsError('unavailable');
-      }
-
-      logger.error('자료 저장소 작업에 실패했습니다.');
-
-      throw new Error('자료 저장소 내부 오류');
-    }
   }
 }

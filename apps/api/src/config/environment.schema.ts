@@ -14,9 +14,11 @@ export const environmentSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65535).default(8000),
+    REDIS_URL: z.url({ protocol: /^rediss?$/ }).optional(),
+    GEMINI_API_KEY: z.string().trim().optional(),
     DATABASE_URL: z
       .url({ protocol: /^postgres(ql)?$/ })
-      .refine((value) => new URL(value).pathname.length > 1),
+      .pipe(z.string().refine((value) => new URL(value).pathname.length > 1)),
     APP_ORIGIN: originSchema,
     GOOGLE_CLIENT_ID: requiredString,
     GOOGLE_CLIENT_SECRET: requiredString,

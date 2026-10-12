@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { doubleCsrf } from 'csrf-csrf';
 import type { Request, RequestHandler, Response } from 'express';
 import { authCookieOptions } from '../auth.cookies.js';
-import { hasBodyHeaders } from '../auth-request.js';
+import { hasBodyHeaders } from '../auth.http.js';
 
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 

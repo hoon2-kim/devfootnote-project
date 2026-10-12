@@ -56,7 +56,7 @@ describe('자료 등록·목록·현재 원문 / 실제 PostgreSQL', () => {
   });
   beforeEach(async () => {
     await harness.pool.query(
-      'truncate auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents',
+      'truncate answer_call_attempts, answer_requests, usage_answer_consents, indexing_embedding_vectors, usage_embedding_call_receipts, auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents, indexing_embedding_attempts, indexing_embedding_works, indexing_embedding_activations, indexing_activation_receipts, usage_embedding_consents, usage_embedding_budgets, usage_embedding_reservations',
     );
     access = `devfootnote_access=${(await harness.auth.completeLogin(GOOGLE_SUBJECT_A)).access}`;
     csrf = await harness.issueCsrf();
@@ -111,13 +111,14 @@ describe('자료 등록·목록·현재 원문 / 실제 PostgreSQL', () => {
   it('동시 같은 요청은 단일 효과이며 다른 payload 경쟁은 하나만 성공한다', async () => {
     const values = input();
     const blocker = await harness.pool.connect();
-    let concurrent: Promise<request.Response[]>;
+    let pending = Promise.resolve<PromiseSettledResult<request.Response>[]>([]);
+    const failures: unknown[] = [];
 
     try {
       await blocker.query('begin');
       // 조회는 허용하고 receipt insert만 막아 모든 요청이 기존 receipt 없이 저장에 진입하게 한다.
       await blocker.query('lock table material_request_receipts in share mode');
-      concurrent = Promise.all(Array.from({ length: 5 }, () => create(values)));
+      pending = Promise.allSettled(Array.from({ length: 5 }, () => create(values)));
       await vi.waitFor(
         async () => {
           const result = await harness.pool.query<{ count: number }>(
@@ -128,12 +129,35 @@ describe('자료 등록·목록·현재 원문 / 실제 PostgreSQL', () => {
         },
         { timeout: 800, interval: 10 },
       );
+    } catch (error) {
+      failures.push(error);
     } finally {
-      await blocker.query('rollback');
-      blocker.release();
+      try {
+        await blocker.query('rollback');
+      } catch (error) {
+        failures.push(error);
+      }
+
+      try {
+        blocker.release();
+      } catch (error) {
+        failures.push(error);
+      }
+
+      await pending;
     }
 
-    const responses = await concurrent;
+    if (failures.length) {
+      throw failures[0];
+    }
+
+    const responses = (await pending).map((result) => {
+      if (result.status === 'rejected') {
+        throw result.reason;
+      }
+
+      return result.value;
+    });
 
     expect(responses.map((response) => response.status)).toEqual([201, 201, 201, 201, 201]);
     expect(new Set(responses.map((response) => response.body.data.id)).size).toBe(1);
@@ -154,14 +178,15 @@ describe('자료 등록·목록·현재 원문 / 실제 PostgreSQL', () => {
     const list = await agent().get('/api/v1/materials').set('Cookie', other).expect(200);
 
     expect(list.body.data.items).toEqual([]);
+    expect(list.body.data).toMatchObject({ totalCount: 0, pageSize: 20, hasNext: false });
     await create({ ...input(), ownerId: randomUUID() }).expect(400);
     await harness.pool.query('update materials set deleted_at = now() where id = $1', [
       first.body.data.id,
     ]);
     await read(first.body.data.id).expect(404);
     expect(
-      (await agent().get('/api/v1/materials').set('Cookie', access).expect(200)).body.data.items,
-    ).toEqual([]);
+      (await agent().get('/api/v1/materials').set('Cookie', access).expect(200)).body.data,
+    ).toMatchObject({ items: [], totalCount: 0, hasNext: false });
   });
 
   it('목록은 안정된 순서·페이지 크기로 나누고 과거 revision을 읽지 않는다', async () => {
@@ -174,12 +199,24 @@ describe('자료 등록·목록·현재 원문 / 실제 PostgreSQL', () => {
 
     expect(list.body.data).toMatchObject({
       page: 1,
+      pageSize: 1,
+      totalCount: 2,
       hasNext: true,
       items: [{ id: second.body.data.id }],
     });
     expect(
       (await agent().get('/api/v1/materials?page=2&pageSize=1').set('Cookie', access)).body.data,
-    ).toMatchObject({ hasNext: false, items: [{ id: first.body.data.id }] });
+    ).toMatchObject({
+      page: 2,
+      pageSize: 1,
+      totalCount: 2,
+      hasNext: false,
+      items: [{ id: first.body.data.id }],
+    });
+    expect(
+      (await agent().get('/api/v1/materials?page=3&pageSize=1').set('Cookie', access).expect(200))
+        .body.data,
+    ).toMatchObject({ page: 3, pageSize: 1, totalCount: 2, hasNext: false, items: [] });
     const revision = randomUUID();
 
     await harness.pool.query(
@@ -197,31 +234,34 @@ describe('자료 등록·목록·현재 원문 / 실제 PostgreSQL', () => {
   });
 
   it.each([
-    'material_revisions',
-    'material_chunks',
-    'material_keywords',
-    'embedding_intents',
-    'material_request_receipts',
-  ])('%s 쓰기 실패는 전체 rollback과 정제된 500이다', async (table) => {
-    const logs = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    { table: 'material_revisions', step: '자료 버전' },
+    { table: 'material_chunks', step: '본문 조각' },
+    { table: 'material_keywords', step: '키워드 검색 데이터' },
+    { table: 'embedding_intents', step: '임베딩 처리 의도' },
+    { table: 'material_request_receipts', step: '요청 처리 결과' },
+  ])(
+    '$step 저장 실패 시 전체 저장을 취소하고 내부 정보 없는 500 응답을 반환한다',
+    async ({ table }) => {
+      const logs = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
 
-    await harness.pool.query(
-      `alter table ${table} add constraint fixture_reject_insert check (false) not valid`,
-    );
-
-    try {
-      const response = await create(input()).expect(500);
-
-      expect(response.body.error).toBe('INTERNAL_SERVER_ERROR');
-      expect(JSON.stringify(response.body) + JSON.stringify(logs.mock.calls)).not.toMatch(
-        /fixture_reject|insert into|저장 근거|내 판단|params|cause/i,
+      await harness.pool.query(
+        `alter table ${table} add constraint fixture_reject_insert check (false) not valid`,
       );
-      expect(await counts()).toEqual([0, 0, 0, 0, 0, 0]);
-    } finally {
-      await harness.pool.query(`alter table ${table} drop constraint fixture_reject_insert`);
-      logs.mockRestore();
-    }
-  });
+
+      try {
+        const response = await create(input()).expect(500);
+
+        expect(response.body.error).toBe('INTERNAL_SERVER_ERROR');
+        expect(JSON.stringify(response.body) + JSON.stringify(logs.mock.calls)).not.toMatch(
+          /fixture_reject|insert into|저장 근거|내 판단|params|cause/i,
+        );
+        expect(await counts()).toEqual([0, 0, 0, 0, 0, 0]);
+      } finally {
+        await harness.pool.query(`alter table ${table} drop constraint fixture_reject_insert`);
+        logs.mockRestore();
+      }
+    },
+  );
 
   it('DB FK가 다른 material의 current pointer와 교차 owner chunk를 거부한다', async () => {
     const first = await create(input()).expect(201);
@@ -267,6 +307,7 @@ describe('자료 등록·목록·현재 원문 / 실제 PostgreSQL', () => {
       { body: 'x'.repeat(10001) },
       { title: null },
       { sourceUrl: 'javascript:alert(1)' },
+      { sourceUrl: 'https://example.com/docs\0private' },
       { body: 'x\0y' },
       { idempotencyKey: 'not-a-uuid' },
     ]) {

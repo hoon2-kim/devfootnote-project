@@ -1001,6 +1001,108 @@
         ]
       }
     },
+    "/api/v1/search/semantic": {
+      "post": {
+        "operationId": "searchSemanticMaterials",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SemanticSearchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SemanticSearchResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
     "/api/v1/search": {
       "get": {
         "operationId": "searchMaterials",
@@ -1125,6 +1227,389 @@
         ]
       }
     },
+    "/api/v1/indexing/embedding/preview": {
+      "get": {
+        "operationId": "previewEmbeddingActivation",
+        "parameters": [
+          {
+            "name": "afterId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 20,
+              "default": 20,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/EmbeddingPreviewDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "EmbeddingActivation"
+        ]
+      }
+    },
+    "/api/v1/indexing/embedding/activations": {
+      "post": {
+        "operationId": "activateCurrentEmbeddings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateEmbeddingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/EmbeddingActivationDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": [],
+            "csrf": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "EmbeddingActivation"
+        ]
+      }
+    },
+    "/api/v1/indexing/embedding/consent/revoke": {
+      "post": {
+        "operationId": "revokeEmbeddingConsent",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeEmbeddingConsentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/EmbeddingConsentDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": [],
+            "csrf": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "EmbeddingActivation"
+        ]
+      }
+    },
     "/api/v1/health/live": {
       "get": {
         "operationId": "getLiveness",
@@ -1161,6 +1646,775 @@
         "summary": "",
         "tags": [
           "Health"
+        ]
+      }
+    },
+    "/api/v1/answers/configuration": {
+      "get": {
+        "operationId": "getAnswerConfiguration",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnswerConfigurationDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Answers"
+        ]
+      }
+    },
+    "/api/v1/answers/consent": {
+      "post": {
+        "operationId": "grantAnswerConsent",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantAnswerConsentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnswerConsentDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": [],
+            "csrf": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Answers"
+        ]
+      }
+    },
+    "/api/v1/answers/consent/revoke": {
+      "post": {
+        "operationId": "revokeAnswerConsent",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeAnswerConsentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnswerConsentDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": [],
+            "csrf": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Answers"
+        ]
+      }
+    },
+    "/api/v1/answers": {
+      "post": {
+        "operationId": "generateAnswer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateAnswerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnswerResultDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": [],
+            "csrf": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Answers"
+        ]
+      }
+    },
+    "/api/v1/answers/{requestId}": {
+      "get": {
+        "operationId": "readAnswer",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnswerResultDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Answers"
+        ]
+      }
+    },
+    "/api/v1/answers/{requestId}/events": {
+      "get": {
+        "description": "저장된 처리 상태와 검증된 답변만 전송한다. AI 생성은 시작하지 않는다.",
+        "operationId": "readAnswerEvents",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerResultDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Answers"
         ]
       }
     }
@@ -1364,12 +2618,24 @@
             "items": {
               "$ref": "#/components/schemas/MaterialSummaryDto"
             }
+          },
+          "pageSize": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "totalCount": {
+            "type": "number",
+            "minimum": 0,
+            "description": "현재 계정의 미삭제 자료 전체 개수"
           }
         },
         "required": [
           "page",
           "hasNext",
-          "items"
+          "items",
+          "pageSize",
+          "totalCount"
         ]
       },
       "UpdateMaterialDto": {
@@ -1530,6 +2796,94 @@
           "matchedField"
         ]
       },
+      "SemanticSearchResponseDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number"
+          },
+          "hasNext": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchItemDto"
+            }
+          },
+          "requestedMode": {
+            "type": "string",
+            "enum": [
+              "vector",
+              "hybrid"
+            ]
+          },
+          "effectiveMode": {
+            "type": "string",
+            "enum": [
+              "keyword",
+              "vector",
+              "hybrid"
+            ]
+          },
+          "degradedReason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "not_configured",
+              "consent_required",
+              "budget_exhausted",
+              "request_used",
+              "provider_unavailable",
+              "consent_changed",
+              "index_unavailable"
+            ]
+          },
+          "resultLimit": {
+            "type": "number",
+            "description": "의미검색은 상위 50개까지만 제공하며 후속 페이지는 호출하지 않습니다."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "후보가 결과 상한을 넘으면 true입니다."
+          }
+        },
+        "required": [
+          "page",
+          "hasNext",
+          "items",
+          "requestedMode",
+          "effectiveMode",
+          "degradedReason",
+          "resultLimit",
+          "truncated"
+        ]
+      },
+      "SemanticSearchDto": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "vector",
+              "hybrid"
+            ]
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "q",
+          "mode",
+          "requestId"
+        ]
+      },
       "SearchResponseDto": {
         "type": "object",
         "properties": {
@@ -1550,6 +2904,583 @@
           "page",
           "hasNext",
           "items"
+        ]
+      },
+      "EmbeddingStateDto": {
+        "type": "object",
+        "properties": {
+          "materialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "PENDING",
+              "LEASED",
+              "CALLING",
+              "RETRY_WAIT",
+              "PUBLISHED",
+              "FINAL_FAILED",
+              "OBSOLETE"
+            ]
+          },
+          "failure": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "materialId",
+          "revisionId",
+          "title",
+          "state",
+          "failure"
+        ]
+      },
+      "EmbeddingPolicyDto": {
+        "type": "object",
+        "properties": {
+          "configFingerprint": {
+            "type": "string"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "retentionNotice": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "unitScale": {
+            "type": "number"
+          },
+          "budgetLimit": {
+            "type": "string",
+            "description": "정수 비용 단위의 기간 한도. 사용자마다 늘어나지 않는 공유 예산이다."
+          }
+        },
+        "required": [
+          "configFingerprint",
+          "policyVersion",
+          "provider",
+          "retentionNotice",
+          "currency",
+          "unitScale",
+          "budgetLimit"
+        ]
+      },
+      "EmbeddingPreviewItemDto": {
+        "type": "object",
+        "properties": {
+          "materialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chunkCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "materialId",
+          "revisionId",
+          "chunkCount"
+        ]
+      },
+      "EmbeddingPreviewDto": {
+        "type": "object",
+        "properties": {
+          "consentEpoch": {
+            "type": "number"
+          },
+          "automatic": {
+            "type": "boolean",
+            "description": "현재 설정·동의에 유효한 자동 준비 활성화 여부"
+          },
+          "includeExisting": {
+            "type": "boolean",
+            "description": "기존 자료까지 자동 준비하도록 명시적으로 활성화했는지 여부"
+          },
+          "consented": {
+            "type": "boolean"
+          },
+          "states": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingStateDto"
+            }
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "policy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingPolicyDto"
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingPreviewItemDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "reservedMaximum": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "consentEpoch",
+          "automatic",
+          "includeExisting",
+          "consented",
+          "states",
+          "configured",
+          "policy",
+          "items",
+          "nextCursor",
+          "reservedMaximum"
+        ]
+      },
+      "Object": {
+        "type": "object",
+        "properties": {}
+      },
+      "EmbeddingActivationDto": {
+        "type": "object",
+        "properties": {
+          "consentEpoch": {
+            "type": "number"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reservedMaximum": {
+            "type": "string",
+            "description": "예약한 최대 비용. 큐 claim이나 AI 처리 완료를 뜻하지 않는다."
+          }
+        },
+        "required": [
+          "consentEpoch",
+          "requestId",
+          "workIds",
+          "reservedMaximum"
+        ]
+      },
+      "EmbeddingTargetDto": {
+        "type": "object",
+        "properties": {
+          "materialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "materialId",
+          "revisionId"
+        ]
+      },
+      "ActivateEmbeddingsDto": {
+        "type": "object",
+        "properties": {
+          "includeExisting": {
+            "type": "boolean",
+            "default": false,
+            "description": "기존 자료와 이후 저장·수정한 본문을 자동으로 준비한다. 빈 targets로 켤 수 있다."
+          },
+          "retryFailed": {
+            "type": "boolean",
+            "default": false,
+            "description": "실패한 현재 자료의 새 generation을 명시적으로 요청한다."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "configFingerprint": {
+            "type": "string"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "expectedConsentEpoch": {
+            "type": "number",
+            "minimum": 0
+          },
+          "accepted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "설명된 정책과 전송 범위에 대한 명시적 동의"
+          },
+          "targets": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingTargetDto"
+            }
+          }
+        },
+        "required": [
+          "requestId",
+          "configFingerprint",
+          "policyVersion",
+          "expectedConsentEpoch",
+          "accepted",
+          "targets"
+        ]
+      },
+      "EmbeddingConsentDto": {
+        "type": "object",
+        "properties": {
+          "consentEpoch": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "consentEpoch"
+        ]
+      },
+      "RevokeEmbeddingConsentDto": {
+        "type": "object",
+        "properties": {
+          "expectedConsentEpoch": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "expectedConsentEpoch"
+        ]
+      },
+      "AnswerPolicyDto": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "retentionNotice": {
+            "type": "string"
+          },
+          "answerRetentionSeconds": {
+            "type": "number"
+          },
+          "receiptRetentionDays": {
+            "type": "number"
+          },
+          "budgetLimit": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "unitScale": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "provider",
+          "model",
+          "retentionNotice",
+          "answerRetentionSeconds",
+          "receiptRetentionDays",
+          "budgetLimit",
+          "currency",
+          "unitScale"
+        ]
+      },
+      "AnswerConfigurationDto": {
+        "type": "object",
+        "properties": {
+          "consentEpoch": {
+            "type": "number"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "consented": {
+            "type": "boolean"
+          },
+          "policy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AnswerPolicyDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "consentEpoch",
+          "configured",
+          "consented",
+          "policy"
+        ]
+      },
+      "AnswerConsentDto": {
+        "type": "object",
+        "properties": {
+          "consentEpoch": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "consentEpoch"
+        ]
+      },
+      "GrantAnswerConsentDto": {
+        "type": "object",
+        "properties": {
+          "expectedConsentEpoch": {
+            "type": "number",
+            "minimum": 0
+          },
+          "policyFingerprint": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "expectedConsentEpoch",
+          "policyFingerprint",
+          "accepted"
+        ]
+      },
+      "RevokeAnswerConsentDto": {
+        "type": "object",
+        "properties": {
+          "expectedConsentEpoch": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "expectedConsentEpoch"
+        ]
+      },
+      "AnswerClaimDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "text",
+          "evidenceIds"
+        ]
+      },
+      "AnswerCitationDto": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string"
+          },
+          "materialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chunkId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startOffset": {
+            "type": "number"
+          },
+          "endOffset": {
+            "type": "number"
+          },
+          "href": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidenceId",
+          "materialId",
+          "revisionId",
+          "chunkId",
+          "startOffset",
+          "endOffset",
+          "href"
+        ]
+      },
+      "AnswerResultDto": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "REQUESTED",
+              "RESERVED",
+              "RUNNING",
+              "PUBLISHED",
+              "NO_ANSWER",
+              "FAILED",
+              "EXPIRED",
+              "INVALIDATED"
+            ]
+          },
+          "failure": {
+            "type": "string",
+            "nullable": true
+          },
+          "claims": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnswerClaimDto"
+            }
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnswerCitationDto"
+            }
+          },
+          "answerExpiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "requestId",
+          "state",
+          "failure",
+          "claims",
+          "citations",
+          "answerExpiresAt"
+        ]
+      },
+      "AnswerHistoryTurnDto": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "question": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "requestId",
+          "question"
+        ]
+      },
+      "AnswerEvidenceTargetDto": {
+        "type": "object",
+        "properties": {
+          "materialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "materialId",
+          "revisionId"
+        ]
+      },
+      "GenerateAnswerDto": {
+        "type": "object",
+        "properties": {
+          "history": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnswerHistoryTurnDto"
+            }
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "evidence": {
+            "minItems": 1,
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnswerEvidenceTargetDto"
+            }
+          }
+        },
+        "required": [
+          "requestId",
+          "question",
+          "evidence"
         ]
       }
     }

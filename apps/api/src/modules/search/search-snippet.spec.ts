@@ -30,16 +30,17 @@ describe('검색 snippet', () => {
     expect(snippet).toBe(Buffer.from(snippet).toString('utf8'));
   });
 
-  it.each(['ﬃ', 'e\u0301', 'ㄱㅏ'])(
-    '길이가 달라지는 정규화(%s) 뒤의 일치 위치를 찾는다',
-    (prefix) => {
-      const { snippet } = createSearchSnippet({ ...content, body: `${prefix.repeat(300)} redis` }, [
-        'redis',
-      ]);
+  it.each([
+    { prefix: 'ﬃ', kind: '합자' },
+    { prefix: 'e\u0301', kind: '결합 문자' },
+    { prefix: 'ㄱㅏ', kind: '한글 자모' },
+  ])('$kind 정규화로 길이가 달라져도 검색어의 일치 위치를 찾는다', ({ prefix }) => {
+    const { snippet } = createSearchSnippet({ ...content, body: `${prefix.repeat(300)} redis` }, [
+      'redis',
+    ]);
 
-      expect(snippet).toContain('redis');
-    },
-  );
+    expect(snippet).toContain('redis');
+  });
 
   it('snippet 시작 경계에서도 이모지를 보존한다', () => {
     const { snippet } = createSearchSnippet(
@@ -52,19 +53,21 @@ describe('검색 snippet', () => {
     expect(snippet).toBe(Buffer.from(snippet).toString('utf8'));
   });
 
-  it.each(['İ', 'ﬃ', 'e\u0301', 'ㄱㅏ', '👩‍💻'])(
-    '긴 본문의 %s 변환 뒤에도 끝부분 일치 위치를 보존한다',
-    (prefix) => {
-      const { snippet } = createSearchSnippet(
-        { ...content, body: `${prefix.repeat(1500)} redis` },
-        ['redis'],
-      );
+  it.each([
+    { prefix: 'İ', kind: '소문자 변환 시 길이가 늘어나는 문자' },
+    { prefix: 'ﬃ', kind: '합자' },
+    { prefix: 'e\u0301', kind: '결합 문자' },
+    { prefix: 'ㄱㅏ', kind: '한글 자모' },
+    { prefix: '👩‍💻', kind: '결합 이모지' },
+  ])('긴 본문의 $kind 정규화 뒤에도 끝부분 검색어의 일치 위치를 보존한다', ({ prefix }) => {
+    const { snippet } = createSearchSnippet({ ...content, body: `${prefix.repeat(1500)} redis` }, [
+      'redis',
+    ]);
 
-      expect(snippet).toContain('redis');
-      expect(snippet.length).toBeLessThanOrEqual(240);
-      expect(snippet).toBe(Buffer.from(snippet).toString('utf8'));
-    },
-  );
+    expect(snippet).toContain('redis');
+    expect(snippet.length).toBeLessThanOrEqual(240);
+    expect(snippet).toBe(Buffer.from(snippet).toString('utf8'));
+  });
 
   it('본문에 일치가 없으면 메모에서 찾고 원문을 그대로 반환한다', () => {
     expect(

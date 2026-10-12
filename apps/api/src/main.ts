@@ -1,13 +1,15 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { logger } from './infrastructure/logging/logger.js';
+import { logger, NestLogger } from './infrastructure/logging/logger.js';
 import { AppModule } from './app.module.js';
 import { configureApp } from './configure-app.js';
 import { EnvironmentError } from './config/environment.js';
 
 async function bootstrap() {
-  const app = configureApp(await NestFactory.create(AppModule, { abortOnError: false }));
+  const app = configureApp(
+    await NestFactory.create(AppModule, { abortOnError: false, logger: new NestLogger() }),
+  );
 
   await app.listen(app.get(ConfigService).getOrThrow<number>('port'));
 }

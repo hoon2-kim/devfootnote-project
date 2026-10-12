@@ -3,9 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from '../services/auth.service.js';
 import type { Request, Response } from 'express';
-import { BINDING_COOKIE } from '../auth.constants.js';
-import { authCookieOptions } from '../auth.cookies.js';
-import { hasBodyHeaders } from '../auth-request.js';
+import { BINDING_COOKIE, authCookieOptions } from '../auth.cookies.js';
+import { hasBodyHeaders } from '../auth.http.js';
 import { loginReturnTo } from '../auth-return-to.js';
 
 @Injectable()

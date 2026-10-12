@@ -1,5 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
+import { TransactionHost, Transactional, Propagation } from '@nestjs-cls/transactional';
+import { isDatabaseUnavailable } from '../../../infrastructure/database/database-error.js';
+import { logger } from '../../../infrastructure/logging/logger.js';
 import type { TokenClaims } from '../auth.types.js';
 import { AuthError } from '../auth.error.js';
 import { AuthRepository } from '../repositories/auth.repository.js';
@@ -14,6 +17,7 @@ export class AuthService {
   constructor(
     private readonly repository: AuthRepository,
     private readonly tokens: TokenService,
+    private readonly transactions: TransactionHost,
   ) {}
 
   async beginLogin(returnTo = '/library') {
@@ -48,16 +52,46 @@ export class AuthService {
   }
 
   // 타입은 string 이지만 provider 응답에 따라 비어 올 수 있다 — 빈 subject 로는 여럿이 한 계정을 쓰게 된다.
+  @Transactional(Propagation.Never)
   async completeLogin(googleProfileId: string) {
     if (typeof googleProfileId !== 'string' || googleProfileId.length === 0) {
       throw new AuthError('denied');
     }
 
-    return this.repository.establishSession(
-      'https://accounts.google.com',
-      googleProfileId,
-      (ownerId) => this.tokens.issue(ownerId),
-    );
+    try {
+      return await this.transactions.withTransaction(async () => {
+        const owner = await this.repository.findOrCreateAccount(
+          'https://accounts.google.com',
+          googleProfileId,
+        );
+        // 로컬 서명도 실패할 수 있으므로 계정 생성·refresh 교체와 함께 rollback한다.
+        const tokens = this.tokens.issue(owner.id);
+
+        await this.repository.replaceRefresh({
+          ownerId: owner.id,
+          tokenHash: hashToken(tokens.refresh),
+          createdAt: new Date(),
+          expiresAt: new Date(tokens.refreshExpiresAt * 1000),
+        });
+
+        return tokens;
+      });
+    } catch (error) {
+      if (error instanceof AuthError) {
+        throw error;
+      }
+
+      // begin·commit 실패까지 이 경계에서 정제하고 원본 오류는 전달하지 않는다.
+      if (isDatabaseUnavailable(error)) {
+        logger.error('로그인 저장소에 일시적으로 접근할 수 없습니다.');
+
+        throw new AuthError('unavailable');
+      }
+
+      logger.error('로그인 처리에 실패했습니다.');
+
+      throw new Error('로그인 내부 오류');
+    }
   }
 
   // 서명은 Guard 가 봤다. 여기서는 그 사이 바뀔 수 있는 현재 refresh 상태만 확인한다.

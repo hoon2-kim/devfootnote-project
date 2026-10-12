@@ -48,11 +48,16 @@ export class MaterialDetailDto extends MaterialSummaryDto {
 
 export class MaterialListDto extends PaginationResponseDto {
   @ApiProperty({ type: [MaterialSummaryDto] }) items!: MaterialSummaryDto[];
+  @ApiProperty({ minimum: 1, maximum: 50 }) pageSize!: number;
+  @ApiProperty({ minimum: 0, description: '현재 계정의 미삭제 자료 전체 개수' })
+  totalCount!: number;
 
   static from(result: MaterialPage): MaterialListDto {
     return {
       items: result.items.map(MaterialSummaryDto.from),
       page: result.page,
+      pageSize: result.pageSize,
+      totalCount: result.totalCount,
       hasNext: result.hasNext,
     };
   }

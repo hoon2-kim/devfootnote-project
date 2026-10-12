@@ -37,7 +37,7 @@ describe('자료 수정·삭제·키워드 검색 정합성', () => {
   });
   beforeEach(async () => {
     await harness.pool.query(
-      'truncate auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents',
+      'truncate answer_call_attempts, answer_requests, usage_answer_consents, indexing_embedding_vectors, usage_embedding_call_receipts, auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents, indexing_embedding_attempts, indexing_embedding_works, indexing_embedding_activations, indexing_activation_receipts, usage_embedding_consents, usage_embedding_budgets, usage_embedding_reservations',
     );
     cookie = `devfootnote_access=${(await harness.auth.completeLogin(GOOGLE_SUBJECT_A)).access}`;
     csrf = await harness.issueCsrf();
@@ -433,40 +433,43 @@ describe('자료 수정·삭제·키워드 검색 정합성', () => {
   });
 
   it.each([
-    'material_revisions',
-    'material_chunks',
-    'material_keywords',
-    'embedding_intents',
-    'material_request_receipts',
-  ])('수정 중 %s 실패는 current pointer와 모든 파생 데이터를 보존한다', async (table) => {
-    const first = (await create('실패 전 원문').expect(201)).body.data;
+    { table: 'material_revisions', step: '자료 버전' },
+    { table: 'material_chunks', step: '본문 조각' },
+    { table: 'material_keywords', step: '키워드 검색 데이터' },
+    { table: 'embedding_intents', step: '임베딩 처리 의도' },
+    { table: 'material_request_receipts', step: '요청 처리 결과' },
+  ])(
+    '수정 중 $step 저장이 실패하면 현재 버전 참조와 모든 파생 데이터를 보존한다',
+    async ({ table }) => {
+      const first = (await create('실패 전 원문').expect(201)).body.data;
 
-    await harness.pool.query(
-      `alter table ${table} add constraint fixture_change_failure check (false) not valid`,
-    );
+      await harness.pool.query(
+        `alter table ${table} add constraint fixture_change_failure check (false) not valid`,
+      );
 
-    try {
-      await update(first.id, first.revisionId, '실패할 새 원문').expect(500);
-      expect(
-        (await agent().get(`/api/v1/materials/${first.id}`).set('Cookie', cookie).expect(200)).body
-          .data.body,
-      ).toBe('실패 전 원문');
-
-      for (const name of [
-        'material_revisions',
-        'material_chunks',
-        'material_keywords',
-        'embedding_intents',
-        'material_request_receipts',
-      ]) {
+      try {
+        await update(first.id, first.revisionId, '실패할 새 원문').expect(500);
         expect(
-          (await harness.pool.query(`select count(*)::int as count from ${name}`)).rows,
-        ).toEqual([{ count: 1 }]);
+          (await agent().get(`/api/v1/materials/${first.id}`).set('Cookie', cookie).expect(200))
+            .body.data.body,
+        ).toBe('실패 전 원문');
+
+        for (const name of [
+          'material_revisions',
+          'material_chunks',
+          'material_keywords',
+          'embedding_intents',
+          'material_request_receipts',
+        ]) {
+          expect(
+            (await harness.pool.query(`select count(*)::int as count from ${name}`)).rows,
+          ).toEqual([{ count: 1 }]);
+        }
+      } finally {
+        await harness.pool.query(`alter table ${table} drop constraint fixture_change_failure`);
       }
-    } finally {
-      await harness.pool.query(`alter table ${table} drop constraint fixture_change_failure`);
-    }
-  });
+    },
+  );
 
   it('삭제 receipt 실패는 tombstone도 취소하고 다른 계정은 변경·검색할 수 없다', async () => {
     const first = (await create('소유자전용 SecretToken').expect(201)).body.data;

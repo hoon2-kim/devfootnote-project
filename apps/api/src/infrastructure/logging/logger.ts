@@ -1,3 +1,4 @@
+import { ConsoleLogger } from '@nestjs/common';
 import { pino } from 'pino';
 
 const level = process.env.LOG_LEVEL ?? 'info';
@@ -21,3 +22,10 @@ export const logger = pino({
     remove: true,
   },
 });
+
+export class NestLogger extends ConsoleLogger {
+  // Nest가 main의 catch보다 먼저 기록하는 초기화·종료 오류도 원문을 넘기지 않는다.
+  override error(): void {
+    logger.error('Nest 내부 처리 중 오류가 발생했습니다.');
+  }
+}

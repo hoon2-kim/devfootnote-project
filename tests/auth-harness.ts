@@ -40,7 +40,11 @@ class FixtureGoogleStrategy extends GoogleStrategy {
   }
 }
 
-export async function startAuthHarness(origin = 'http://127.0.0.1:3000', apiPort = 0) {
+export async function startAuthHarness(
+  origin = 'http://127.0.0.1:3000',
+  apiPort = 0,
+  redisUrl?: string,
+) {
   const container = await new PostgreSqlContainer(
     'pgvector/pgvector:0.8.6-pg17-trixie@sha256:724a4041afdb1750446e3f6b5cfa8f3b0ac5a2cf538ddfa6bfee4f94c2fa85c6',
   )
@@ -51,6 +55,7 @@ export async function startAuthHarness(origin = 'http://127.0.0.1:3000', apiPort
     ...authEnvironment,
     DATABASE_URL: container.getConnectionUri(),
     APP_ORIGIN: origin,
+    ...(redisUrl ? { REDIS_URL: redisUrl } : {}),
   };
   const previous = Object.fromEntries(
     Object.keys(environment).map((key) => [key, process.env[key]]),
@@ -92,9 +97,15 @@ export async function startAuthHarness(origin = 'http://127.0.0.1:3000', apiPort
   });
 
   async function close() {
+    const failures: unknown[] = [];
+
     try {
       await app?.close();
-    } finally {
+    } catch (error) {
+      failures.push(error);
+    }
+
+    try {
       googleServer.closeAllConnections();
 
       if (googleServer.listening) {
@@ -102,10 +113,21 @@ export async function startAuthHarness(origin = 'http://127.0.0.1:3000', apiPort
           googleServer.close((error) => (error ? reject(error) : resolve())),
         );
       }
+    } catch (error) {
+      failures.push(error);
+    }
 
+    try {
       await pool.end();
-      await container.stop();
+    } catch (error) {
+      failures.push(error);
+    }
 
+    try {
+      await container.stop();
+    } catch (error) {
+      failures.push(error);
+    } finally {
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) {
           delete process.env[key];
@@ -114,10 +136,14 @@ export async function startAuthHarness(origin = 'http://127.0.0.1:3000', apiPort
         }
       }
     }
+
+    if (failures.length) {
+      throw new AggregateError(failures, '인증 테스트 자원 정리에 실패했습니다.');
+    }
   }
 
   try {
-    await migrate(drizzle(pool), { migrationsFolder: 'apps/api/drizzle' });
+    await migrate(drizzle(pool), { migrationsFolder: 'packages/db/migrations' });
     googleServer.listen(0, '127.0.0.1');
     await once(googleServer, 'listening');
     const address = googleServer.address();
@@ -185,7 +211,14 @@ export async function startAuthHarness(origin = 'http://127.0.0.1:3000', apiPort
       close,
     };
   } catch (error) {
-    await close();
+    try {
+      await close();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        '인증 테스트 기동과 자원 정리에 실패했습니다.',
+      );
+    }
 
     throw error;
   }

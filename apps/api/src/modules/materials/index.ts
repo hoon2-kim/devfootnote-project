@@ -10,3 +10,5 @@ export type {
 } from './application/materials.types.js';
 export type { MaterialMutationResult, MaterialPage } from './application/materials.types.js';
 export type { MaterialSearchCandidate } from './application/materials.types.js';
+export type { RankedMaterialReference } from './application/materials.types.js';
+export type { CurrentEmbeddingIntent, EmbeddingTarget } from './application/materials.types.js';

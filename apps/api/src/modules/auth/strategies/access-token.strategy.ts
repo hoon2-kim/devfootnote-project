@@ -4,8 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
 import { validateTokenClaims } from '../services/token.service.js';
 import type { Request } from 'express';
-import { readCookie } from '../auth.cookies.js';
-import { ACCESS_COOKIE } from '../auth.constants.js';
+import { ACCESS_COOKIE, readCookie } from '../auth.cookies.js';
 
 @Injectable()
 export class AccessTokenStrategy extends PassportStrategy(Strategy, 'access-token') {

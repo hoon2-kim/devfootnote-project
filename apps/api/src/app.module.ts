@@ -5,6 +5,9 @@ import { validateEnvironment } from './config/environment.js';
 import { AuthModule } from './modules/auth/index.js';
 import { MaterialsModule } from './modules/materials/index.js';
 import { SearchModule } from './modules/search/index.js';
+import { IndexingModule } from './modules/indexing/index.js';
+import { TransactionsModule } from './infrastructure/database/transactions.module.js';
+import { AnswersModule } from './modules/answers/index.js';
 
 @Module({
   imports: [
@@ -15,9 +18,12 @@ import { SearchModule } from './modules/search/index.js';
       load: [() => validateEnvironment(process.env)],
     }),
     AuthModule,
+    TransactionsModule,
     MaterialsModule,
     SearchModule,
     HealthModule,
+    IndexingModule,
+    AnswersModule,
   ],
 })
 export class AppModule {}

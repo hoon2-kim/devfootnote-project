@@ -1,10 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { JwtService } from '@nestjs/jwt';
-import { drizzle } from 'drizzle-orm/node-postgres';
 import { AuthError } from '../apps/api/dist/modules/auth/auth.error.js';
 import { logger } from '../apps/api/dist/infrastructure/logging/logger.js';
-import { AuthRepository } from '../apps/api/dist/modules/auth/repositories/auth.repository.js';
+import { TokenService } from '../apps/api/dist/modules/auth/services/token.service.js';
 import { startAuthHarness } from './auth-harness.js';
 import { authEnvironment, GOOGLE_SUBJECT_A, GOOGLE_SUBJECT_B } from './auth-environment.js';
 
@@ -20,7 +19,7 @@ describe('Passport Google·JWT와 실제 PostgreSQL 인증', () => {
   });
   beforeEach(async () => {
     await harness.pool.query(
-      'truncate auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents',
+      'truncate answer_call_attempts, answer_requests, usage_answer_consents, indexing_embedding_vectors, usage_embedding_call_receipts, auth_refresh_tokens, accounts, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents, indexing_embedding_attempts, indexing_embedding_works, indexing_embedding_activations, indexing_activation_receipts, usage_embedding_consents, usage_embedding_budgets, usage_embedding_reservations',
     );
     harness.setSubject(GOOGLE_SUBJECT_A);
     harness.setGoogleFailure(undefined);
@@ -156,18 +155,69 @@ describe('Passport Google·JWT와 실제 PostgreSQL 인증', () => {
   });
 
   it('transaction 안의 토큰 발급 버그는 DB 불가로 분류하지 않고 계정 생성도 rollback한다', async () => {
-    const repository = new AuthRepository(drizzle(harness.pool));
-    const failure = repository.establishSession(
-      'https://accounts.google.com',
-      GOOGLE_SUBJECT_A,
-      () => {
-        throw new Error('PRIVATE_SIGNING_KEY_FAILURE');
-      },
+    const signing = vi.spyOn(harness.app.get(TokenService), 'issue').mockImplementationOnce(() => {
+      throw new Error('PRIVATE_SIGNING_KEY_FAILURE');
+    });
+
+    try {
+      const failure = login();
+
+      await expect(failure).rejects.not.toBeInstanceOf(AuthError);
+      await expect(failure).rejects.not.toHaveProperty('cause');
+      await expect(failure).rejects.not.toHaveProperty('message', 'PRIVATE_SIGNING_KEY_FAILURE');
+      expect(
+        (await harness.pool.query('select count(*)::int as count from accounts')).rows[0].count,
+      ).toBe(0);
+      expect(
+        (await harness.pool.query('select count(*)::int as count from auth_refresh_tokens')).rows[0]
+          .count,
+      ).toBe(0);
+    } finally {
+      signing.mockRestore();
+    }
+  });
+
+  it('재로그인 토큰 발급 실패는 기존 계정과 refresh를 그대로 보존한다', async () => {
+    const first = await login();
+    const before = (await harness.pool.query('select * from auth_refresh_tokens')).rows;
+    const signing = vi.spyOn(harness.app.get(TokenService), 'issue').mockImplementationOnce(() => {
+      throw new Error('PRIVATE_SIGNING_KEY_FAILURE');
+    });
+
+    try {
+      await expect(login()).rejects.toThrow('로그인 내부 오류');
+    } finally {
+      signing.mockRestore();
+    }
+
+    expect((await harness.pool.query('select * from auth_refresh_tokens')).rows).toEqual(before);
+    expect(
+      (await harness.pool.query('select count(*)::int as count from accounts')).rows[0].count,
+    ).toBe(1);
+    await agent()
+      .post('/api/v1/auth/refresh')
+      .set(csrf.headers)
+      .set('Cookie', refreshCookies(first.refresh))
+      .expect(204);
+  });
+
+  it('refresh 저장 SQL 실패는 앞선 신규 계정 생성도 rollback한다', async () => {
+    await harness.pool.query(
+      'alter table auth_refresh_tokens rename column token_hash to broken_token_hash',
     );
 
-    await expect(failure).rejects.not.toBeInstanceOf(AuthError);
-    await expect(failure).rejects.not.toHaveProperty('cause');
-    await expect(failure).rejects.not.toHaveProperty('message', 'PRIVATE_SIGNING_KEY_FAILURE');
+    try {
+      const failure = login();
+
+      await expect(failure).rejects.not.toBeInstanceOf(AuthError);
+      await expect(failure).rejects.not.toHaveProperty('cause');
+      await expect(failure).rejects.toThrow('로그인 내부 오류');
+    } finally {
+      await harness.pool.query(
+        'alter table auth_refresh_tokens rename column broken_token_hash to token_hash',
+      );
+    }
+
     expect(
       (await harness.pool.query('select count(*)::int as count from accounts')).rows[0].count,
     ).toBe(0);
@@ -175,6 +225,71 @@ describe('Passport Google·JWT와 실제 PostgreSQL 인증', () => {
       (await harness.pool.query('select count(*)::int as count from auth_refresh_tokens')).rows[0]
         .count,
     ).toBe(0);
+  });
+
+  it('COMMIT 거부는 계정·refresh를 rollback하고 callback에 서비스 쿠키를 발급하지 않는다', async () => {
+    const signing = vi.spyOn(harness.app.get(TokenService), 'issue');
+    const logs = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const failures: unknown[] = [];
+
+    try {
+      await harness.pool.query(`
+        create function test_reject_login_commit() returns trigger language plpgsql as $$
+        begin
+          raise exception 'PRIVATE_LOGIN_COMMIT_FAILURE' using errcode = '23514';
+        end;
+        $$
+      `);
+      // INSERT 자체는 성공하고 transaction body가 끝난 COMMIT 시점에만 거부한다.
+      await harness.pool.query(`
+        create constraint trigger test_reject_login_commit
+        after insert on auth_refresh_tokens deferrable initially deferred
+        for each row execute function test_reject_login_commit()
+      `);
+      const flow = await authorize();
+      const response = await callback(flow.location, flow.binding);
+
+      expect(signing).toHaveBeenCalledOnce();
+      expect(signing.mock.results[0]?.type).toBe('return');
+      expect(response.headers.location).toBe('/login?error=authentication_failed');
+      expect(JSON.stringify(response.get('Set-Cookie') ?? [])).not.toMatch(
+        /devfootnote_(access|refresh)=/,
+      );
+      expect(response.text).not.toMatch(/PRIVATE_LOGIN_COMMIT_FAILURE|eyJ/);
+      expect(logs).toHaveBeenCalled();
+      expect(JSON.stringify(logs.mock.calls)).not.toMatch(
+        /PRIVATE_LOGIN_COMMIT_FAILURE|test_reject_login_commit|auth_refresh_tokens|insert |eyJ/,
+      );
+
+      for (const table of ['accounts', 'auth_refresh_tokens']) {
+        expect(
+          (await harness.pool.query(`select count(*)::int as count from ${table}`)).rows[0].count,
+        ).toBe(0);
+      }
+    } catch (error) {
+      failures.push(error);
+    } finally {
+      for (const statement of [
+        'drop trigger if exists test_reject_login_commit on auth_refresh_tokens',
+        'drop function if exists test_reject_login_commit()',
+      ]) {
+        try {
+          await harness.pool.query(statement);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+
+      signing.mockRestore();
+      logs.mockRestore();
+    }
+
+    if (failures.length) {
+      throw new AggregateError(
+        failures,
+        '로그인 COMMIT 거부 검사 또는 fixture 정리에 실패했습니다.',
+      );
+    }
   });
 
   it('CSRF 발급 endpoint는 인증 없이 토큰을 제공하고 캐시하지 않는다', async () => {
@@ -422,23 +537,23 @@ describe('Passport Google·JWT와 실제 PostgreSQL 인증', () => {
     await agent().get('/api/v1/auth/google?code=fixture-google-code').expect(400);
     expect(harness.googleCalls).toEqual({ token: 0, profile: 0 });
   });
-  it.each(['code=fixture-google-code', 'error=access_denied'])(
-    '잘못된 callback·사용자 취소 %s는 장애 로그를 남기지 않는다',
-    async (query) => {
-      const logs = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+  it.each([
+    { query: 'code=fixture-google-code', reason: '잘못된 콜백' },
+    { query: 'error=access_denied', reason: '사용자의 로그인 취소' },
+  ])('$reason 상황에서는 장애 로그를 남기지 않는다', async ({ query }) => {
+    const logs = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
 
-      try {
-        await agent()
-          .get(`/api/v1/auth/google/callback?${query}`)
-          .expect(302)
-          .expect('Location', '/login?error=authentication_failed');
-        expect(logs).not.toHaveBeenCalled();
-        expect(harness.googleCalls).toEqual({ token: 0, profile: 0 });
-      } finally {
-        logs.mockRestore();
-      }
-    },
-  );
+    try {
+      await agent()
+        .get(`/api/v1/auth/google/callback?${query}`)
+        .expect(302)
+        .expect('Location', '/login?error=authentication_failed');
+      expect(logs).not.toHaveBeenCalled();
+      expect(harness.googleCalls).toEqual({ token: 0, profile: 0 });
+    } finally {
+      logs.mockRestore();
+    }
+  });
   it('Google 시작 경로의 JSON body code도 state 검증을 우회할 수 없다', async () => {
     const response = await agent().get('/api/v1/auth/google').send({ code: 'fixture-google-code' });
 
@@ -453,9 +568,12 @@ describe('Passport Google·JWT와 실제 PostgreSQL 인증', () => {
         .toBe(0);
     }
   });
-  it.each(['token', 'profile'] as const)(
-    'Google %s 실패는 계정·refresh를 저장하지 않고 일반 오류만 반환한다',
-    async (failure) => {
+  it.each([
+    { failure: 'token', step: '토큰 발급' },
+    { failure: 'profile', step: '프로필 조회' },
+  ] as const)(
+    'Google $step 실패 시 계정·갱신 토큰을 저장하지 않고 일반 오류만 반환한다',
+    async ({ failure }) => {
       harness.setGoogleFailure(failure);
       const flow = await authorize();
       const logs = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
@@ -813,29 +931,37 @@ describe('Passport Google·JWT와 실제 PostgreSQL 인증', () => {
     expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
   });
 
-  it.each([
-    ['/search?q=redis&page=2', '/search?q=redis&page=2'],
-    ['/search?q=redis%20%5C', '/search?q=redis%20%5C'],
+  it.each(
     [
-      '/documents/12345678-1234-4234-8234-123456789abc?revision=12345678-1234-4234-8234-123456789def#source-title',
-      '/documents/12345678-1234-4234-8234-123456789abc?revision=12345678-1234-4234-8234-123456789def#source-title',
-    ],
-    ['https://attacker.invalid', '/library'],
-    ['//attacker.invalid', '/library'],
-    ['/\\attacker.invalid', '/library'],
-    ['/login', '/library'],
-    ['/search?q=x&q=y', '/library'],
-    ['/search?page=0', '/library'],
-    ['/search?redirect=https://attacker.invalid', '/library'],
-    ['/documents/not-a-uuid', '/library'],
-    ['/library#unsafe', '/library'],
-  ])('로그인 복귀 %s는 state에 연결된 %s로만 이동한다', async (input, expected) => {
-    const flow = await authorize([], input);
-    const callbackUrl = new URL(flow.location);
+      ['/search?q=redis&page=2', '/search?q=redis&page=2'],
+      ['/search?q=redis&mode=hybrid', '/search?q=redis&mode=hybrid'],
+      ['/search?mode=external', '/library'],
+      ['/search?mode=vector&mode=hybrid', '/library'],
+      ['/search?q=redis%20%5C', '/search?q=redis%20%5C'],
+      [
+        '/documents/12345678-1234-4234-8234-123456789abc?revision=12345678-1234-4234-8234-123456789def#source-title',
+        '/documents/12345678-1234-4234-8234-123456789abc?revision=12345678-1234-4234-8234-123456789def#source-title',
+      ],
+      ['https://attacker.invalid', '/library'],
+      ['//attacker.invalid', '/library'],
+      ['/\\attacker.invalid', '/library'],
+      ['/login', '/library'],
+      ['/search?q=x&q=y', '/library'],
+      ['/search?page=0', '/library'],
+      ['/search?redirect=https://attacker.invalid', '/library'],
+      ['/documents/not-a-uuid', '/library'],
+      ['/library#unsafe', '/library'],
+    ].map(([input, expected]) => ({ input, expected })),
+  )(
+    '로그인 복귀 요청($input)은 인증 상태에 연결된 경로($expected)로만 이동한다',
+    async ({ input, expected }) => {
+      const flow = await authorize([], input);
+      const callbackUrl = new URL(flow.location);
 
-    callbackUrl.searchParams.set('returnTo', 'https://attacker.invalid');
-    expect((await callback(callbackUrl.href, flow.binding)).headers.location).toBe(expected);
-  });
+      callbackUrl.searchParams.set('returnTo', 'https://attacker.invalid');
+      expect((await callback(callbackUrl.href, flow.binding)).headers.location).toBe(expected);
+    },
+  );
 
   it('만료 pre-auth·refresh 정리는 최대 100건이며 잠긴 행과 미만료 행을 보존한다', async () => {
     await harness.pool.query(`insert into auth_oauth_states (state_hash, binding_hash, expires_at)

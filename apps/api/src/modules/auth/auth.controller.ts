@@ -16,8 +16,13 @@ import { AuthError } from './auth.error.js';
 import { AuthService } from './services/auth.service.js';
 import { logger } from '../../infrastructure/logging/logger.js';
 import type { Request, Response } from 'express';
-import { ACCESS_COOKIE, REFRESH_COOKIE } from './auth.constants.js';
-import { authCookieOptions, readCookie, setTokenCookies } from './auth.cookies.js';
+import {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  authCookieOptions,
+  readCookie,
+  setTokenCookies,
+} from './auth.cookies.js';
 import { Public } from './decorators/public.decorator.js';
 import { RefreshTokenGuard } from './guards/refresh-token.guard.js';
 import { GoogleLoginGuard } from './guards/google-login.guard.js';
@@ -26,7 +31,7 @@ import type {
   AuthenticatedRequest,
   GoogleAuthenticatedRequest,
   RefreshAuthenticatedRequest,
-} from './auth-request.types.js';
+} from './auth.http.js';
 import { CsrfTokenDto, OwnerDto } from './dto/response/auth-response.dto.js';
 import { ApiEnvelope } from '../../common/decorators/api-envelope.decorator.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';

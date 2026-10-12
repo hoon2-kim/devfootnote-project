@@ -1,4 +1,18 @@
 import type { Request } from 'express';
+import type { TokenClaims } from './auth.types.js';
+
+export interface AuthenticatedRequest extends Request {
+  user: { ownerId: string };
+}
+
+export interface GoogleAuthenticatedRequest extends Request {
+  user: { googleId: string };
+  loginReturnTo: string;
+}
+
+export interface RefreshAuthenticatedRequest extends Request {
+  user: TokenClaims;
+}
 
 // 파싱된 req.body 대신 전송 헤더로 판단해야 비 JSON 본문도 인증 경계에서 거부할 수 있다.
 export function hasBodyHeaders(req: Pick<Request, 'headers'>): boolean {

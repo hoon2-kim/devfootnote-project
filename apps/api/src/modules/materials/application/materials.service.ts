@@ -1,14 +1,21 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { PageResult } from '../../../common/pagination/page-result.js';
 import { mutationFingerprint, prepareMaterial } from '../domain/material-content.js';
+import { MaterialsError } from '../domain/materials.error.js';
 import { MATERIALS_REPOSITORY, type MaterialsRepository } from './ports/materials.repository.js';
+import {
+  MATERIALS_QUERY_REPOSITORY,
+  type MaterialsQueryRepository,
+} from './ports/materials-query.repository.js';
 import type {
+  EmbeddingTarget,
   CreateMaterialInput,
   DeleteMaterialInput,
   MaterialDetail,
   MaterialMutationResult,
   MaterialPage,
   MaterialSearchCandidate,
+  RankedMaterialReference,
   UpdateMaterialInput,
 } from './materials.types.js';
 
@@ -18,7 +25,40 @@ import type {
  */
 @Injectable()
 export class MaterialsService {
-  constructor(@Inject(MATERIALS_REPOSITORY) private readonly repository: MaterialsRepository) {}
+  constructor(
+    @Inject(MATERIALS_REPOSITORY) private readonly repository: MaterialsRepository,
+    @Inject(MATERIALS_QUERY_REPOSITORY) private readonly queries: MaterialsQueryRepository,
+  ) {}
+
+  currentEmbeddingIntents(ownerId: string, afterId: string | undefined, limit: number) {
+    return this.repository.currentEmbeddingIntents(ownerId, afterId, limit);
+  }
+
+  lockAnswerEvidence(ownerId: string, targets: EmbeddingTarget[]) {
+    return this.repository.lockAnswerEvidence(ownerId, targets);
+  }
+
+  async lockCurrentEmbeddingIntents(ownerId: string, targets: EmbeddingTarget[]) {
+    const rows = await this.repository.lockEmbeddingIntents(ownerId, targets);
+
+    if (rows.length !== targets.length) {
+      throw new MaterialsError('not_found');
+    }
+
+    if (
+      rows.some(
+        (row) =>
+          !targets.some(
+            (target) =>
+              target.materialId === row.materialId && target.revisionId === row.revisionId,
+          ),
+      )
+    ) {
+      throw new MaterialsError('revision_conflict');
+    }
+
+    return rows;
+  }
 
   async create(ownerId: string, input: CreateMaterialInput): Promise<MaterialMutationResult> {
     const prepared = prepareMaterial(input);
@@ -27,9 +67,9 @@ export class MaterialsService {
   }
 
   async list(ownerId: string, page: number, pageSize: number): Promise<MaterialPage> {
-    const result = await this.repository.list(ownerId, page, pageSize);
+    const result = await this.queries.list(ownerId, page, pageSize);
 
-    return { ...result, page };
+    return { ...result, page, pageSize };
   }
 
   async update(
@@ -71,10 +111,18 @@ export class MaterialsService {
     page: number,
     pageSize: number,
   ): Promise<PageResult<MaterialSearchCandidate>> {
-    return this.repository.keywordCandidates(ownerId, query, page, pageSize);
+    return this.queries.keywordCandidates(ownerId, query, page, pageSize);
   }
 
   read(ownerId: string, id: string): Promise<MaterialDetail> {
-    return this.repository.read(ownerId, id);
+    return this.queries.read(ownerId, id);
+  }
+
+  rankedCurrentCandidates(
+    ownerId: string,
+    references: readonly RankedMaterialReference[],
+    limit: number,
+  ) {
+    return this.queries.rankedCurrentCandidates(ownerId, references, limit);
   }
 }

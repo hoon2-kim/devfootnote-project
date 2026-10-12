@@ -8,7 +8,7 @@ import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { DrizzleMaterialsRepository } from '../../apps/api/dist/modules/materials/infrastructure/drizzle-materials.repository.js';
+import { DrizzleMaterialsQueryRepository } from '../../apps/api/dist/modules/materials/infrastructure/drizzle-materials-query.repository.js';
 
 const image =
   'pgvector/pgvector:0.8.6-pg17-trixie@sha256:724a4041afdb1750446e3f6b5cfa8f3b0ac5a2cf538ddfa6bfee4f94c2fa85c6';
@@ -23,7 +23,7 @@ const db = drizzle(pool, {
     },
   },
 });
-const repository = new DrizzleMaterialsRepository(db);
+const repository = new DrizzleMaterialsQueryRepository(db);
 const results = [];
 
 // 운영·개발 연결을 받지 않는다. 아래 DDL/fixture는 이 실행의 컨테이너에서만 수행한다.
@@ -33,7 +33,7 @@ async function seed(size) {
   try {
     await client.query('begin');
     await client.query(
-      'truncate accounts, auth_refresh_tokens, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents',
+      'truncate accounts, auth_refresh_tokens, auth_oauth_states, materials, material_revisions, material_chunks, material_keywords, material_request_receipts, embedding_intents, indexing_embedding_attempts, indexing_embedding_works, indexing_embedding_activations, indexing_activation_receipts, usage_embedding_consents, usage_embedding_budgets, usage_embedding_reservations',
     );
     await client.query(
       `insert into accounts (id, issuer, subject) values
@@ -147,7 +147,7 @@ async function measure(size, query, page, concurrency) {
 }
 
 try {
-  await migrate(db, { migrationsFolder: 'apps/api/drizzle' });
+  await migrate(db, { migrationsFolder: 'packages/db/migrations' });
   const settings = await pool.query(`select name, setting, unit from pg_settings where name in
     ('server_version', 'shared_buffers', 'work_mem', 'effective_cache_size', 'random_page_cost', 'max_parallel_workers_per_gather')`);
   const docker = JSON.parse(

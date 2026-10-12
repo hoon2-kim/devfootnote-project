@@ -5,10 +5,8 @@ import { AuthError } from '../auth.error.js';
 import { AuthService } from '../services/auth.service.js';
 import { logger } from '../../../infrastructure/logging/logger.js';
 import type { Response } from 'express';
-import { BINDING_COOKIE } from '../auth.constants.js';
-import { authCookieOptions, readCookie } from '../auth.cookies.js';
-import { hasBodyHeaders } from '../auth-request.js';
-import type { GoogleAuthenticatedRequest } from '../auth-request.types.js';
+import { BINDING_COOKIE, authCookieOptions, readCookie } from '../auth.cookies.js';
+import { hasBodyHeaders, type GoogleAuthenticatedRequest } from '../auth.http.js';
 
 @Injectable()
 export class GoogleCallbackGuard extends AuthGuard('google') {

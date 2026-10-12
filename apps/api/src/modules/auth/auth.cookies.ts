@@ -1,7 +1,10 @@
 import type { SessionTokens } from './auth.types.js';
 import { parseCookie } from 'cookie';
 import type { CookieOptions, Request, Response } from 'express';
-import { ACCESS_COOKIE, REFRESH_COOKIE } from './auth.constants.js';
+
+export const ACCESS_COOKIE = 'devfootnote_access';
+export const REFRESH_COOKIE = 'devfootnote_refresh';
+export const BINDING_COOKIE = 'devfootnote_login';
 
 // cookie-parser의 JSON 쿠키 변환을 거치지 않고 인증 값을 문자열로 읽는다.
 export function readCookie(req: Pick<Request, 'headers'>, name: string): string | undefined {

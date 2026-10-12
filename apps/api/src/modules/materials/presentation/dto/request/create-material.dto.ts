@@ -46,6 +46,7 @@ export class CreateMaterialDto {
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @MaxLength(2048)
+  @NotContains('\0')
   @IsUrl({
     protocols: ['http', 'https'],
     require_protocol: true,

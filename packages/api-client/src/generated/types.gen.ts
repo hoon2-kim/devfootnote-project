@@ -55,6 +55,11 @@ export type MaterialListDto = {
     page: number;
     hasNext: boolean;
     items: Array<MaterialSummaryDto>;
+    pageSize: number;
+    /**
+     * 현재 계정의 미삭제 자료 전체 개수
+     */
+    totalCount: number;
 };
 
 export type UpdateMaterialDto = {
@@ -98,10 +103,200 @@ export type SearchItemDto = {
     matchedField: 'body' | 'note' | 'context' | 'title' | 'sourceUrl';
 };
 
+export type SemanticSearchResponseDto = {
+    page: number;
+    hasNext: boolean;
+    items: Array<SearchItemDto>;
+    requestedMode: 'vector' | 'hybrid';
+    effectiveMode: 'keyword' | 'vector' | 'hybrid';
+    degradedReason: 'not_configured' | 'consent_required' | 'budget_exhausted' | 'request_used' | 'provider_unavailable' | 'consent_changed' | 'index_unavailable';
+    /**
+     * 의미검색은 상위 50개까지만 제공하며 후속 페이지는 호출하지 않습니다.
+     */
+    resultLimit: number;
+    /**
+     * 후보가 결과 상한을 넘으면 true입니다.
+     */
+    truncated: boolean;
+};
+
+export type SemanticSearchDto = {
+    q: string;
+    mode: 'vector' | 'hybrid';
+    requestId: string;
+};
+
 export type SearchResponseDto = {
     page: number;
     hasNext: boolean;
     items: Array<SearchItemDto>;
+};
+
+export type EmbeddingStateDto = {
+    materialId: string;
+    revisionId: string;
+    title: string | null;
+    state: 'NOT_STARTED' | 'PENDING' | 'LEASED' | 'CALLING' | 'RETRY_WAIT' | 'PUBLISHED' | 'FINAL_FAILED' | 'OBSOLETE';
+    failure: string | null;
+};
+
+export type EmbeddingPolicyDto = {
+    configFingerprint: string;
+    policyVersion: string;
+    provider: string;
+    retentionNotice: string;
+    currency: string;
+    unitScale: number;
+    /**
+     * 정수 비용 단위의 기간 한도. 사용자마다 늘어나지 않는 공유 예산이다.
+     */
+    budgetLimit: string;
+};
+
+export type EmbeddingPreviewItemDto = {
+    materialId: string;
+    revisionId: string;
+    chunkCount: number;
+};
+
+export type EmbeddingPreviewDto = {
+    consentEpoch: number;
+    /**
+     * 현재 설정·동의에 유효한 자동 준비 활성화 여부
+     */
+    automatic: boolean;
+    /**
+     * 기존 자료까지 자동 준비하도록 명시적으로 활성화했는지 여부
+     */
+    includeExisting: boolean;
+    consented: boolean;
+    states: Array<EmbeddingStateDto>;
+    configured: boolean;
+    policy: EmbeddingPolicyDto | null;
+    items: Array<EmbeddingPreviewItemDto>;
+    nextCursor: string | null;
+    reservedMaximum: string;
+};
+
+export type Object = {
+    [key: string]: unknown;
+};
+
+export type EmbeddingActivationDto = {
+    consentEpoch: number;
+    requestId: string;
+    workIds: Array<string>;
+    /**
+     * 예약한 최대 비용. 큐 claim이나 AI 처리 완료를 뜻하지 않는다.
+     */
+    reservedMaximum: string;
+};
+
+export type EmbeddingTargetDto = {
+    materialId: string;
+    revisionId: string;
+};
+
+export type ActivateEmbeddingsDto = {
+    /**
+     * 기존 자료와 이후 저장·수정한 본문을 자동으로 준비한다. 빈 targets로 켤 수 있다.
+     */
+    includeExisting?: boolean;
+    /**
+     * 실패한 현재 자료의 새 generation을 명시적으로 요청한다.
+     */
+    retryFailed?: boolean;
+    requestId: string;
+    configFingerprint: string;
+    policyVersion: string;
+    expectedConsentEpoch: number;
+    /**
+     * 설명된 정책과 전송 범위에 대한 명시적 동의
+     */
+    accepted: true;
+    targets: Array<EmbeddingTargetDto>;
+};
+
+export type EmbeddingConsentDto = {
+    consentEpoch: number;
+};
+
+export type RevokeEmbeddingConsentDto = {
+    expectedConsentEpoch: number;
+};
+
+export type AnswerPolicyDto = {
+    fingerprint: string;
+    provider: string;
+    model: string;
+    retentionNotice: string;
+    answerRetentionSeconds: number;
+    receiptRetentionDays: number;
+    budgetLimit: string;
+    currency: string;
+    unitScale: number;
+};
+
+export type AnswerConfigurationDto = {
+    consentEpoch: number;
+    configured: boolean;
+    consented: boolean;
+    policy: AnswerPolicyDto | null;
+};
+
+export type AnswerConsentDto = {
+    consentEpoch: number;
+};
+
+export type GrantAnswerConsentDto = {
+    expectedConsentEpoch: number;
+    policyFingerprint: string;
+    accepted: true;
+};
+
+export type RevokeAnswerConsentDto = {
+    expectedConsentEpoch: number;
+};
+
+export type AnswerClaimDto = {
+    text: string;
+    evidenceIds: Array<string>;
+};
+
+export type AnswerCitationDto = {
+    evidenceId: string;
+    materialId: string;
+    revisionId: string;
+    chunkId: string;
+    startOffset: number;
+    endOffset: number;
+    href: string;
+};
+
+export type AnswerResultDto = {
+    requestId: string;
+    state: 'REQUESTED' | 'RESERVED' | 'RUNNING' | 'PUBLISHED' | 'NO_ANSWER' | 'FAILED' | 'EXPIRED' | 'INVALIDATED';
+    failure: string | null;
+    claims: Array<AnswerClaimDto>;
+    citations: Array<AnswerCitationDto>;
+    answerExpiresAt: string | null;
+};
+
+export type AnswerHistoryTurnDto = {
+    requestId: string;
+    question: string;
+};
+
+export type AnswerEvidenceTargetDto = {
+    materialId: string;
+    revisionId: string;
+};
+
+export type GenerateAnswerDto = {
+    history?: Array<AnswerHistoryTurnDto>;
+    requestId: string;
+    question: string;
+    evidence: Array<AnswerEvidenceTargetDto>;
 };
 
 export type BeginGoogleLoginData = {
@@ -458,6 +653,32 @@ export type UpdateMaterialResponses = {
 
 export type UpdateMaterialResponse = UpdateMaterialResponses[keyof UpdateMaterialResponses];
 
+export type SearchSemanticMaterialsData = {
+    body: SemanticSearchDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/search/semantic';
+};
+
+export type SearchSemanticMaterialsErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type SearchSemanticMaterialsError = SearchSemanticMaterialsErrors[keyof SearchSemanticMaterialsErrors];
+
+export type SearchSemanticMaterialsResponses = {
+    200: {
+        success: true;
+        data: SemanticSearchResponseDto;
+    };
+};
+
+export type SearchSemanticMaterialsResponse = SearchSemanticMaterialsResponses[keyof SearchSemanticMaterialsResponses];
+
 export type SearchMaterialsData = {
     body?: never;
     path?: never;
@@ -487,6 +708,93 @@ export type SearchMaterialsResponses = {
 };
 
 export type SearchMaterialsResponse = SearchMaterialsResponses[keyof SearchMaterialsResponses];
+
+export type PreviewEmbeddingActivationData = {
+    body?: never;
+    path?: never;
+    query?: {
+        afterId?: string;
+        limit?: Object;
+    };
+    url: '/api/v1/indexing/embedding/preview';
+};
+
+export type PreviewEmbeddingActivationErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type PreviewEmbeddingActivationError = PreviewEmbeddingActivationErrors[keyof PreviewEmbeddingActivationErrors];
+
+export type PreviewEmbeddingActivationResponses = {
+    200: {
+        success: true;
+        data: EmbeddingPreviewDto;
+    };
+};
+
+export type PreviewEmbeddingActivationResponse = PreviewEmbeddingActivationResponses[keyof PreviewEmbeddingActivationResponses];
+
+export type ActivateCurrentEmbeddingsData = {
+    body: ActivateEmbeddingsDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/indexing/embedding/activations';
+};
+
+export type ActivateCurrentEmbeddingsErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type ActivateCurrentEmbeddingsError = ActivateCurrentEmbeddingsErrors[keyof ActivateCurrentEmbeddingsErrors];
+
+export type ActivateCurrentEmbeddingsResponses = {
+    202: {
+        success: true;
+        data: EmbeddingActivationDto;
+    };
+};
+
+export type ActivateCurrentEmbeddingsResponse = ActivateCurrentEmbeddingsResponses[keyof ActivateCurrentEmbeddingsResponses];
+
+export type RevokeEmbeddingConsentData = {
+    body: RevokeEmbeddingConsentDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/indexing/embedding/consent/revoke';
+};
+
+export type RevokeEmbeddingConsentErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type RevokeEmbeddingConsentError = RevokeEmbeddingConsentErrors[keyof RevokeEmbeddingConsentErrors];
+
+export type RevokeEmbeddingConsentResponses = {
+    200: {
+        success: true;
+        data: EmbeddingConsentDto;
+    };
+};
+
+export type RevokeEmbeddingConsentResponse = RevokeEmbeddingConsentResponses[keyof RevokeEmbeddingConsentResponses];
 
 export type GetLivenessData = {
     body?: never;
@@ -533,3 +841,178 @@ export type GetReadinessResponses = {
      */
     200: unknown;
 };
+
+export type GetAnswerConfigurationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/answers/configuration';
+};
+
+export type GetAnswerConfigurationErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    429: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type GetAnswerConfigurationError = GetAnswerConfigurationErrors[keyof GetAnswerConfigurationErrors];
+
+export type GetAnswerConfigurationResponses = {
+    200: {
+        success: true;
+        data: AnswerConfigurationDto;
+    };
+};
+
+export type GetAnswerConfigurationResponse = GetAnswerConfigurationResponses[keyof GetAnswerConfigurationResponses];
+
+export type GrantAnswerConsentData = {
+    body: GrantAnswerConsentDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/answers/consent';
+};
+
+export type GrantAnswerConsentErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    429: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type GrantAnswerConsentError = GrantAnswerConsentErrors[keyof GrantAnswerConsentErrors];
+
+export type GrantAnswerConsentResponses = {
+    200: {
+        success: true;
+        data: AnswerConsentDto;
+    };
+};
+
+export type GrantAnswerConsentResponse = GrantAnswerConsentResponses[keyof GrantAnswerConsentResponses];
+
+export type RevokeAnswerConsentData = {
+    body: RevokeAnswerConsentDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/answers/consent/revoke';
+};
+
+export type RevokeAnswerConsentErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    429: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type RevokeAnswerConsentError = RevokeAnswerConsentErrors[keyof RevokeAnswerConsentErrors];
+
+export type RevokeAnswerConsentResponses = {
+    200: {
+        success: true;
+        data: AnswerConsentDto;
+    };
+};
+
+export type RevokeAnswerConsentResponse = RevokeAnswerConsentResponses[keyof RevokeAnswerConsentResponses];
+
+export type GenerateAnswerData = {
+    body: GenerateAnswerDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/answers';
+};
+
+export type GenerateAnswerErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    429: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type GenerateAnswerError = GenerateAnswerErrors[keyof GenerateAnswerErrors];
+
+export type GenerateAnswerResponses = {
+    202: {
+        success: true;
+        data: AnswerResultDto;
+    };
+};
+
+export type GenerateAnswerResponse = GenerateAnswerResponses[keyof GenerateAnswerResponses];
+
+export type ReadAnswerData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/answers/{requestId}';
+};
+
+export type ReadAnswerErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    429: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type ReadAnswerError = ReadAnswerErrors[keyof ReadAnswerErrors];
+
+export type ReadAnswerResponses = {
+    200: {
+        success: true;
+        data: AnswerResultDto;
+    };
+};
+
+export type ReadAnswerResponse = ReadAnswerResponses[keyof ReadAnswerResponses];
+
+export type ReadAnswerEventsData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/answers/{requestId}/events';
+};
+
+export type ReadAnswerEventsErrors = {
+    400: ApiErrorDto;
+    401: ApiErrorDto;
+    403: ApiErrorDto;
+    404: ApiErrorDto;
+    409: ApiErrorDto;
+    429: ApiErrorDto;
+    500: ApiErrorDto;
+    503: ApiErrorDto;
+};
+
+export type ReadAnswerEventsError = ReadAnswerEventsErrors[keyof ReadAnswerEventsErrors];
+
+export type ReadAnswerEventsResponses = {
+    200: AnswerResultDto;
+};
+
+export type ReadAnswerEventsResponse = ReadAnswerEventsResponses[keyof ReadAnswerEventsResponses];
