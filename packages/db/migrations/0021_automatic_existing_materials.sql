@@ -1,0 +1,1 @@
+ALTER TABLE "indexing_embedding_activations" ADD COLUMN "include_existing" boolean DEFAULT false NOT NULL;

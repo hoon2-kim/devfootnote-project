@@ -10,7 +10,10 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 
 const LOCK_KEY = 731830;
-const migrationsFolder = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../drizzle');
+const migrationsFolder = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../migrations',
+);
 
 // message에는 Drizzle의 SQL·parameter가 포함된다. 원본 값은 출력하지 않고 알려진 code만 분류한다.
 const ERROR_CATEGORIES = new Map([

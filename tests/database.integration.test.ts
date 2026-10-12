@@ -27,7 +27,7 @@ const {
 
 const image =
   'pgvector/pgvector:0.8.6-pg17-trixie@sha256:724a4041afdb1750446e3f6b5cfa8f3b0ac5a2cf538ddfa6bfee4f94c2fa85c6';
-const migrationsFolder = 'apps/api/drizzle';
+const migrationsFolder = 'packages/db/migrations';
 
 describe('격리 PostgreSQL / migration / DB lifecycle', () => {
   let container: StartedPostgreSqlContainer;
@@ -367,7 +367,7 @@ describe('격리 PostgreSQL / migration / DB lifecycle', () => {
     it('명시적 migration 실행기는 동시 실행을 거부하고 잠금 해제 후 적용된다', async () => {
       const client = await pool.connect();
       const options = {
-        cwd: path.resolve('apps/api'),
+        cwd: path.resolve('packages/db'),
         encoding: 'utf8' as const,
         env: process.env,
       };
@@ -422,7 +422,7 @@ describe('격리 PostgreSQL / migration / DB lifecycle', () => {
         url.username = role;
         url.password = password;
         const failed = spawnSync(process.execPath, ['scripts/migrate.mjs'], {
-          cwd: path.resolve('apps/api'),
+          cwd: path.resolve('packages/db'),
           encoding: 'utf8',
           timeout: 5000,
           env: { ...process.env, DATABASE_URL: url.href },
@@ -445,7 +445,7 @@ describe('격리 PostgreSQL / migration / DB lifecycle', () => {
         )
       ).rows;
       const options = {
-        cwd: path.resolve('apps/api'),
+        cwd: path.resolve('packages/db'),
         encoding: 'utf8' as const,
         timeout: 5000,
         env: process.env,
@@ -531,7 +531,12 @@ describe('격리 PostgreSQL / migration / DB lifecycle', () => {
         process.execPath,
         [
           '-e',
-          "const { createPool } = require('./apps/api/dist/infrastructure/database/database.provider.js'); const pool = createPool(); pool.emit('error', new Error('PRIVATE_SQL_PARAMETER_TOKEN')); pool.end();",
+          `const { ConfigService } = require('@nestjs/config');
+           const { validateEnvironment } = require('./apps/api/dist/config/environment.js');
+           const { createPool } = require('./apps/api/dist/infrastructure/database/database.provider.js');
+           const pool = createPool(new ConfigService(validateEnvironment(process.env)));
+           pool.emit('error', new Error('PRIVATE_SQL_PARAMETER_TOKEN'));
+           pool.end();`,
         ],
         { encoding: 'utf8', env: process.env },
       );

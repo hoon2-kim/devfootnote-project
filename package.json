@@ -8,24 +8,26 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "typecheck": "pnpm build:api && turbo run typecheck && tsc -p tsconfig.tests.json",
+    "typecheck": "pnpm build:backend && turbo run typecheck && tsc -p tsconfig.tests.json",
     "lint": "eslint . && pnpm format:check && pnpm lint:architecture",
     "format": "eslint . --fix && prettier --write '**/*.{ts,tsx,js,mjs,cjs,json,css,yml,yaml}'",
     "format:check": "prettier --check '**/*.{ts,tsx,js,mjs,cjs,json,css,yml,yaml}'",
-    "test": "pnpm build:api && vitest run --exclude '**/*.integration.test.ts'",
-    "test:integration": "pnpm build:api && vitest run tests/*.integration.test.ts",
+    "test": "pnpm build:backend && vitest run --exclude '**/*.integration.test.ts'",
+    "test:integration": "pnpm build:backend && vitest run tests/*.integration.test.ts",
     "test:browser": "playwright test",
     "test:images": "playwright test --config playwright.images.config.ts",
     "bench:search": "pnpm build:api && node tests/benchmarks/keyword-search.mjs",
     "build:api": "turbo run build --filter @devfootnote/api",
     "openapi:generate": "pnpm build:api && pnpm --filter @devfootnote/api openapi:generate && pnpm --filter @devfootnote/api-client generate",
     "openapi:check": "node scripts/check-generated.mjs",
-    "db:generate": "pnpm --filter @devfootnote/api db:generate",
-    "db:migrate": "pnpm --filter @devfootnote/api db:migrate",
-    "db:migrate:prod": "pnpm --filter @devfootnote/api db:migrate:prod",
-    "lint:architecture": "depcruise --config .dependency-cruiser.cjs apps/api/src apps/web/src packages/api-client/src"
+    "db:generate": "pnpm --filter @devfootnote/db db:generate",
+    "db:migrate": "pnpm --filter @devfootnote/db db:migrate",
+    "db:migrate:prod": "pnpm --filter @devfootnote/db db:migrate:prod",
+    "lint:architecture": "depcruise --config .dependency-cruiser.cjs apps/api/src apps/worker/src apps/web/src packages/api-client/src packages/db/src packages/queue/src packages/ai/src",
+    "build:backend": "turbo run build --filter @devfootnote/api --filter @devfootnote/worker"
   },
   "devDependencies": {
+    "@devfootnote/ai": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@axe-core/playwright": "4.13.0",
     "@eslint/js": "9.39.4",
@@ -52,6 +54,11 @@
     "turbo": "2.10.13",
     "typescript": "catalog:",
     "typescript-eslint": "8.70.0",
-    "vitest": "4.0.18"
+    "vitest": "4.0.18",
+    "@devfootnote/db": "workspace:*",
+    "@devfootnote/queue": "workspace:*",
+    "bullmq": "catalog:",
+    "ioredis": "catalog:",
+    "testcontainers": "catalog:"
   }
 }

@@ -15,6 +15,7 @@
       "cache": false,
       "passThroughEnv": [
         "DATABASE_URL",
+        "REDIS_URL",
         "PORT",
         "LOG_LEVEL",
         "APP_ORIGIN",
@@ -23,7 +24,8 @@
         "GOOGLE_CLIENT_SECRET",
         "JWT_ACCESS_SECRET",
         "JWT_REFRESH_SECRET",
-        "CSRF_SECRET"
+        "CSRF_SECRET",
+        "GEMINI_API_KEY"
       ]
     }
   }

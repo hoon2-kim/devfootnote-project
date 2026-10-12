@@ -71,6 +71,12 @@ export const materialChunks = pgTable(
   },
   (table) => [
     unique('chunks_revision_ordinal_unique').on(table.revisionId, table.ordinal),
+    unique('chunks_owner_revision_identity').on(
+      table.ownerId,
+      table.materialId,
+      table.revisionId,
+      table.id,
+    ),
     check(
       'chunks_valid_offsets',
       sql`${table.ordinal} >= 0 and ${table.startOffset} >= 0 and ${table.endOffset} > ${table.startOffset}`,
@@ -145,6 +151,7 @@ export const embeddingIntents = pgTable(
   },
   (table) => [
     unique('intents_revision_unique').on(table.revisionId),
+    unique('intents_owner_id_unique').on(table.ownerId, table.id),
     foreignKey({
       columns: [table.ownerId, table.materialId, table.revisionId],
       foreignColumns: [

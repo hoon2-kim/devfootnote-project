@@ -1,0 +1,37 @@
+{
+  "name": "@devfootnote/worker",
+  "private": true,
+  "version": "0.0.0",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc-watch --onSuccess 'node ../../scripts/run-env.mjs worker dev --watch dist/main.js'",
+    "start": "node ../../scripts/run-env.mjs worker prod dist/main.js"
+  },
+  "dependencies": {
+    "@devfootnote/ai": "workspace:*",
+    "nestjs-cls": "catalog:",
+    "@nestjs-cls/transactional": "catalog:",
+    "@nestjs-cls/transactional-adapter-drizzle-orm": "catalog:",
+    "@devfootnote/db": "workspace:*",
+    "@devfootnote/queue": "workspace:*",
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/config": "catalog:",
+    "bullmq": "catalog:",
+    "ioredis": "catalog:",
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:",
+    "pino": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "tsc-watch": "catalog:",
+    "@types/pg": "catalog:"
+  }
+}

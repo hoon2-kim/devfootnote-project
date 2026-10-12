@@ -10,12 +10,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsc-watch --onSuccess 'node ../../scripts/run-env.mjs api dev --watch dist/main.js'",
     "start": "node ../../scripts/run-env.mjs api prod dist/main.js",
-    "openapi:generate": "node dist/openapi.js",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "node ../../scripts/run-env.mjs api dev scripts/migrate.mjs",
-    "db:migrate:prod": "node ../../scripts/run-env.mjs api prod scripts/migrate.mjs"
+    "openapi:generate": "node dist/openapi.js"
   },
   "dependencies": {
+    "@devfootnote/ai": "workspace:*",
+    "nestjs-cls": "catalog:",
+    "@nestjs-cls/transactional": "catalog:",
+    "@nestjs-cls/transactional-adapter-drizzle-orm": "catalog:",
     "cookie": "2.0.1",
     "cookie-parser": "1.4.7",
     "csrf-csrf": "4.0.3",
@@ -37,13 +38,16 @@
     "class-transformer": "catalog:",
     "class-validator": "catalog:",
     "reflect-metadata": "catalog:",
-    "rxjs": "catalog:"
+    "rxjs": "catalog:",
+    "@devfootnote/db": "workspace:*",
+    "@devfootnote/queue": "workspace:*",
+    "bullmq": "catalog:",
+    "ioredis": "catalog:"
   },
   "devDependencies": {
-    "drizzle-kit": "catalog:",
     "@types/cookie-parser": "1.4.10",
     "@types/passport-google-oauth20": "catalog:",
     "@types/passport-jwt": "catalog:",
-    "tsc-watch": "7.2.0"
+    "tsc-watch": "catalog:"
   }
 }

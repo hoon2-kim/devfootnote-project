@@ -1,0 +1,2 @@
+ALTER TABLE "indexing_embedding_activations" ADD COLUMN "enabled_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+CREATE INDEX "embedding_activation_scan_idx" ON "indexing_embedding_activations" USING btree ("scan_after","owner_id");

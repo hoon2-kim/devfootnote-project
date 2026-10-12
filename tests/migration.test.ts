@@ -7,7 +7,7 @@ it('migration은 DB 설정 누락 시 명시적으로 실패한다', () => {
 
   delete env.DATABASE_URL;
   const result = spawnSync(process.execPath, ['scripts/migrate.mjs'], {
-    cwd: path.resolve('apps/api'),
+    cwd: path.resolve('packages/db'),
     encoding: 'utf8',
     timeout: 5000,
     env,
@@ -21,7 +21,7 @@ it('migration은 DB 설정 누락 시 명시적으로 실패한다', () => {
 it('migration은 연결 URL 파싱 실패에도 입력과 stack을 노출하지 않는다', () => {
   // 실제 연결 없이 URL parser에서 거부되는 합성 입력이다.
   const result = spawnSync(process.execPath, ['scripts/migrate.mjs'], {
-    cwd: path.resolve('apps/api'),
+    cwd: path.resolve('packages/db'),
     encoding: 'utf8',
     timeout: 5000,
     env: {

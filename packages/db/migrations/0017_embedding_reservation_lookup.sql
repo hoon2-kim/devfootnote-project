@@ -1,0 +1,5 @@
+ALTER TABLE "indexing_embedding_attempts" DROP CONSTRAINT "embedding_attempt_failure_class";--> statement-breakpoint
+ALTER TABLE "indexing_embedding_works" DROP CONSTRAINT "embedding_work_failure_class";--> statement-breakpoint
+CREATE INDEX "embedding_work_owner_reservation_idx" ON "indexing_embedding_works" USING btree ("owner_id","reservation_id");--> statement-breakpoint
+ALTER TABLE "indexing_embedding_attempts" ADD CONSTRAINT "embedding_attempt_failure_class" CHECK ("indexing_embedding_attempts"."failure" in ('timeout', 'rate_limited', 'provider_error', 'access_denied', 'invalid_response', 'unknown_outcome', 'lease_expired', 'material_obsolete', 'consent_revoked', 'config_changed', 'reservation_expired', 'reservation_missing'));--> statement-breakpoint
+ALTER TABLE "indexing_embedding_works" ADD CONSTRAINT "embedding_work_failure_class" CHECK ("indexing_embedding_works"."last_failure" in ('timeout', 'rate_limited', 'provider_error', 'access_denied', 'invalid_response', 'unknown_outcome', 'lease_expired', 'material_obsolete', 'consent_revoked', 'config_changed', 'reservation_expired', 'reservation_missing'));

@@ -11,6 +11,6 @@ docs/
 test-results/
 playwright-report/
 packages/api-client/src/generated/
-apps/api/drizzle/
+packages/db/migrations/
 apps/api/openapi.json
 pnpm-lock.yaml

@@ -7,6 +7,13 @@ saveExact: true
 # 루트 테스트와 각 workspace가 같은 물리 모듈을 쓰도록 공유 의존성의 버전을 한 곳에서 소유한다.
 # 여기 없는 의존성은 해당 package 하나만 사용한다.
 catalog:
+  nestjs-cls: 6.3.1
+  '@nestjs-cls/transactional': 3.3.1
+  '@nestjs-cls/transactional-adapter-drizzle-orm': 1.5.1
+  bullmq: 6.3.8
+  ioredis: 6.0.0
+  testcontainers: 12.1.0
+  tsc-watch: 7.2.0
   '@tanstack/react-query': 5.102.8
   zod: 4.6.5
   '@nestjs/config': 12.0.0
@@ -51,6 +58,7 @@ minimumReleaseAgeExclude:
   - '@turbo/windows-arm64@2.10.13'
   - turbo@2.10.13
 allowBuilds:
+  msgpackr-extract: false
   '@scarf/scarf': false
   cpu-features: false
   esbuild: true

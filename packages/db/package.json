@@ -1,0 +1,59 @@
+{
+  "name": "@devfootnote/db",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "dist",
+    "migrations",
+    "scripts"
+  ],
+  "exports": {
+    "./schema/answers": {
+      "types": "./dist/schema/answers.d.ts",
+      "default": "./dist/schema/answers.js"
+    },
+    "./indexing-policy": {
+      "types": "./dist/indexing-policy.d.ts",
+      "default": "./dist/indexing-policy.js"
+    },
+    "./usage-retention/budget-reservation": {
+      "types": "./dist/usage-retention/budget-reservation.d.ts",
+      "default": "./dist/usage-retention/budget-reservation.js"
+    },
+    ".": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./schema/auth": {
+      "types": "./dist/schema/auth.d.ts",
+      "default": "./dist/schema/auth.js"
+    },
+    "./schema/materials": {
+      "types": "./dist/schema/materials.d.ts",
+      "default": "./dist/schema/materials.js"
+    },
+    "./schema/usage-retention": {
+      "types": "./dist/schema/usage-retention.d.ts",
+      "default": "./dist/schema/usage-retention.js"
+    },
+    "./schema/indexing": {
+      "types": "./dist/schema/indexing.d.ts",
+      "default": "./dist/schema/indexing.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node ../../scripts/run-env.mjs api dev scripts/migrate.mjs",
+    "db:migrate:prod": "node ../../scripts/run-env.mjs api prod scripts/migrate.mjs"
+  },
+  "dependencies": {
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "drizzle-kit": "catalog:",
+    "@types/pg": "catalog:"
+  }
+}

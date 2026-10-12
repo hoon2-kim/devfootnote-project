@@ -6,7 +6,7 @@ export default defineConfig({
     include: ['tests/**/*.test.ts', 'apps/api/src/**/*.spec.ts'],
     setupFiles: ['tests/setup.ts'],
     // Nest가 require하는 빌드 모듈을 다시 변환하면 DI token·singleton이 이중 생성된다.
-    server: { deps: { external: [/apps\/api\/dist\//] } },
+    server: { deps: { external: [/apps\/(api|worker)\/dist\//, /packages\/db\/dist\//] } },
     testTimeout: 15000,
     hookTimeout: 120000,
   },

@@ -40,6 +40,23 @@ export default tseslint.config(
     languageOptions: { globals: { module: 'readonly', require: 'readonly' } },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
+  {
+    files: ['apps/api/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'bullmq',
+              importNames: ['Worker', 'QueueScheduler', 'JobScheduler'],
+              message: 'consumer·scheduler는 apps/worker에서만 등록합니다.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Playwright fixture는 의존성이 없어도 첫 인자에 객체 구조 분해를 요구한다.
   {
     files: ['tests/browser/**/*.ts'],

@@ -1,0 +1,160 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789453928755,
+      "tag": "0000_enable_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789485643660,
+      "tag": "0001_freezing_micromacro",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789488386475,
+      "tag": "0002_passport_google_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789538102882,
+      "tag": "0003_allow_multiple_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789635538220,
+      "tag": "0004_materials",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789635548026,
+      "tag": "0005_materials_relational_fences",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789640608479,
+      "tag": "0006_keyword_search_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789752590217,
+      "tag": "0007_auth_expiry_and_return_to",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789840827258,
+      "tag": "0008_rename_oauth_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789891132316,
+      "tag": "0009_stored_search_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789978103123,
+      "tag": "0010_outstanding_lilith",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790010496366,
+      "tag": "0011_dear_meteorite",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790075609615,
+      "tag": "0012_embedding_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790793540445,
+      "tag": "0013_embedding_publication",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790842124087,
+      "tag": "0014_embedding_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790842514464,
+      "tag": "0015_embedding_activation_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790843094728,
+      "tag": "0016_embedding_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791273184592,
+      "tag": "0017_embedding_reservation_lookup",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791273546795,
+      "tag": "0018_ai_reservation_purpose",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791274151389,
+      "tag": "0019_answer_consent_usage",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791275213315,
+      "tag": "0020_answer_execution_constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791828325880,
+      "tag": "0021_automatic_existing_materials",
+      "breakpoints": true
+    }
+  ]
+}
