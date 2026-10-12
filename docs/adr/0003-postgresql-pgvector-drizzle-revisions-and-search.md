@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-09-12
-- Updated: 2026-09-20 — OAuth 임시 상태 rename migration; refresh·revision·원자 저장 계약 유지
+- Updated: 2026-10-01 — 1,536차원 publication·exact 검색·상위 50개와 lifecycle/retention migration
+- Updated: 2026-09-22 — embedding attempt·복구 시각·예약 노출 migration 추가
 - Canonical owner: 관계형 저장 표현, Drizzle schema/transaction과 SQL migration, revision과 keyword/vector 검색 불변식
 
 ## Context
@@ -27,7 +28,7 @@ SIGTERM 또는 Nest app close 시 새 요청·claim을 중단하고 진행 중 �
 
 ### 명시적 transaction과 조건부 갱신
 
-transaction은 application owner가 `db.transaction(async (tx) => ...)`로 경계를 소유한다. 원자 작업에 참여하는 persistence adapter와 transactional public port는 같은 scoped `tx`/connection으로 실행되게 명시적으로 연결한다. 이 경계 안에서 전역 `db`, `pool.query` 또는 별도 transaction으로 빠져나가지 않는다. DB·transaction 타입은 선택한 driver와 schema에서 추론하며 repository/query-builder handle을 public 결과로 노출하지 않는다. 현재 CLS 기반 전파는 도입하지 않는다. 여러 저장소의 원자 협력이 실제로 필요할 때 scoped transaction/CLS를 결정한다. broad untyped cast, 시작 시 자동 migration과 network call을 포함한 transaction은 금지한다.
+transaction은 업무 owner가 경계를 소유한다. materials 원자 저장과 OAuth state 생성은 기존 Repository의 `db.transaction(async (tx) => ...)`에서 완결한다. 로그인·Phase 2 활성화·worker 실행 전이는 [ADR-0002의 CLS Drizzle 전파](0002-modular-monolith-domain-ownership.md#트랜잭션-전파-도입-기준)로 Service가 여러 호출을 같은 연결에 묶는다. 이 경계 안에서 전역 `db`, `pool.query` 또는 별도 transaction으로 빠져나가지 않는다. DB·transaction 타입은 선택한 driver와 schema에서 추론하며 repository/query-builder handle을 public 결과로 노출하지 않는다. refresh CAS·logout과 다른 단일 Repository 작업을 CLS로 일괄 전환하지 않는다. broad untyped cast, 시작 시 자동 migration과 network call을 포함한 transaction은 금지한다.
 
 입력 검증·결정적 chunking처럼 DB가 필요 없는 계산은 transaction 전에 수행하고, 최신 revision/권한·제약 확인은 transaction 안에서 다시 판정한다. 조건부 상태 전이는 predicate를 포함한 update와 `returning` 결과 또는 영향 행 수로 성공을 판정한다. 0건은 해당 업무 계약에 따라 stale/conflict/already-terminal 등으로 구분하며 무조건 성공으로 바꾸지 않는다. 원자 작업을 취소해야 하는 실패는 throw 또는 명시적 rollback으로 전파하고 callback 안에서 정상 return하여 앞선 쓰기가 부분 commit되지 않게 한다. pool timeout이나 deadlock을 숨기는 전역 자동 retry를 넣지 않고, retry가 필요하면 원자 작업 전체의 재실행 안전성과 한도를 해당 owner에서 검증한다.
 
@@ -39,13 +40,15 @@ transaction은 application owner가 `db.transaction(async (tx) => ...)`로 경�
 - 사용자 값은 parameter로 바인딩한다. 문자열 연결이나 `sql.raw`로 사용자 입력을 삽입하지 않고 동적 식별자는 고정 schema object 또는 서버 allowlist로 제한한다. `sql<T>`의 타입 표기는 runtime 검증·변환이 아니므로 실제 driver 반환값과 raw query 결과를 integration test로 확인한다.
 - HTTP/public 결과는 필요한 column만 선택해 업무 결과 계약으로 반환하고 DB row 전체를 그대로 노출하지 않는다. timestamp·numeric·vector 등 변환이 필요한 반환값은 목적별로 명시적으로 처리하며 타입 단언만으로 맞추지 않는다.
 - DB 오류는 해당 persistence 경계에서 안정적인 PostgreSQL 오류 code와 알려진 constraint를 기준으로 필요한 업무 오류로 변환한다. 모든 unique 위반을 같은 충돌로 취급하거나 원본 message 문자열을 파싱하지 않는다. Drizzle가 감싼 `cause`·SQL·parameter, PostgreSQL `detail`에는 원문·토큰 해시 등이 들어갈 수 있으므로 API 오류·운영 telemetry로 전달하지 않는다. 범용 ORM 오류 framework 대신 필요한 오류만 작은 함수로 분류한다.
-- 인증 저장소는 알려진 연결 장애·DB 기동/종료·연결 용량 부족·잠금 timeout/질의 취소 code만 unavailable로 분류한다. Drizzle의 직접 cause에서 code를 확인하되 원본 오류는 전달하지 않는다. schema 불일치·미분류 제약 위반·transaction 안의 토큰 발급 버그는 안전한 내부 오류로 바꾸며 일반 JSON endpoint에서는 500으로 처리한다. OAuth callback은 기존 일반 실패 redirect를 유지한다. 업무별 constraint 변환은 해당 CRUD 계약과 함께 추가하며 자동 재시도는 하지 않는다.
+- 인증 DB 경계는 알려진 연결 장애·DB 기동/종료·연결 용량 부족·잠금 timeout/질의 취소 code만 unavailable로 분류한다. Drizzle의 직접 cause에서 code를 확인하되 원본 오류는 전달하지 않는다. schema 불일치·미분류 제약 위반은 안전한 내부 오류로 바꾸며 일반 JSON endpoint에서는 500으로 처리한다. 로그인은 Service가 transaction 시작·commit과 토큰 발급 실패도 정제한다. DB가 거부한 commit은 전체 rollback하지만 연결 유실로 결과가 불명확한 commit까지 rollback으로 단정하지 않는다. OAuth callback은 기존 일반 실패 redirect를 유지하며 실패에는 token을 반환하지 않는다. 업무별 constraint 변환은 해당 CRUD 계약과 함께 추가하며 자동 재시도는 하지 않는다.
 
 ### 현재 schema 배치와 전환 기준
 
-현재 `drizzle(pool)`은 select/query builder를 사용하며 런타임 통합 schema 객체와 `db.query.*`는 사용하지 않는다. Kit의 `src/**/*.schema.ts` glob은 DDL 수집일 뿐 런타임 relations를 제공하지 않는다. custom `0005`의 account FK·deferred current-revision FK와 `0006`의 검색 DDL은 SQL 이력이 소유하며 Kit snapshot만으로 이를 재현한다고 주장하지 않는다. 새 generate 결과는 실제 DB의 custom 제약·index와 대조하고 과거 SQL/metadata를 수정하지 않는다.
+Phase 2부터 `packages/db/src/schema/index.ts`가 전체 런타임 schema를 모아 `drizzle(pool, { schema })`에 전달하고 Kit도 같은 진입점을 사용한다. 현재 Repository는 명시적인 select/update builder를 유지한다. 런타임 schema 수집과 조회용 `relations()` 선언은 별개이며 필요한 relation은 해당 기능에서 추가한다. custom `0005`의 account FK·deferred current-revision FK와 `0006`의 검색 DDL은 SQL 이력이 소유하며 Kit snapshot만으로 이를 재현한다고 주장하지 않는다. 새 generate 결과는 실제 DB의 custom 제약·index와 대조하고 과거 SQL/metadata를 수정하지 않는다.
 
-worker가 같은 DB를 사용하거나, `db.query`가 필요하거나, 교차 feature FK가 3개를 초과하는 시점 중 먼저 도달한 시점에 schema 수집 방식을 재검토한다. worker 도입 시에는 **전체** schema·migration·Kit config·연결 팩토리를 `packages/db`로 이동하고 migration은 한 곳에서만 생성·적용한다. 이때 표현 가능한 FK는 `references()` 등으로 명시하되 기존 DB 제약과 snapshot을 비교한 후속 migration으로 정합성을 맞춘다. 이번 파일 이동에서는 기존 SQL·snapshot·journal의 내용과 적용 순서를 바꾸지 않는다.
+worker claim 도입으로 **전체** schema·migration·Kit config·연결 팩토리를 `packages/db`로 이동했다. 기존 `0000`~`0009` SQL·snapshot과 journal의 이전 항목·순서는 보존했다. 당시 `0010`은 work table과 owner/intent FK, generation/active unique, pending index, lease/state CHECK를 추가했다. 참조받는 intent의 `(owner_id, id)` unique를 먼저 만든 뒤 FK를 생성하도록 SQL 순서를 검토했다. 뒤이은 활성화 slice의 `0011`은 동의·예산 예약·활성화 receipt와 work 연결을 추가했다. 과거 custom FK를 TS로 옮기는 별도 정합화는 이 이동과 섞지 않는다.
+
+3단계의 `0012_embedding_recovery.sql`은 work의 attempt count·안전한 실패 분류·다음 delivery 시각과 복구 index, `indexing_embedding_attempts`, 예약의 `exposure_started_at`을 추가한다. attempt는 owner/work composite FK, `(work_id, number)` unique와 work당 미완료 STARTED 한 건의 partial unique를 갖는다. attempt identity·시작 시각을 보존하고 종료 결과·종료 시각만 확정하며 횟수·상태 CHECK도 DB에서 유지한다. 참조 unique를 FK보다 먼저 만들고 과거 SQL·snapshot은 수정하지 않는다. vector column·성공 publication row는 이번 migration에 포함하지 않는다. additive DDL도 잠금을 요구하므로 개발 DB 적용은 앱 중지·대상 확인 뒤 별도로 수행하며 무중단 migration으로 주장하지 않는다.
 
 ### 저장 관계와 불변식
 
@@ -105,6 +108,8 @@ snippet 위치 변환은 grapheme 전체 배열 대신 `Intl.Segmenter.containin
 
 추가 한 행을 조회해 `hasNext`를 판정하는 것은 Repository 내부 구현이다. 목록·검색 후보의 공통 반환 계약은 `PageResult<T> { items, hasNext }`이며 소비자가 배열 길이로 다음 페이지를 추측하지 않는다. 현재 OFFSET와 기존 HTTP page 계약을 유지한다. 검색 점수 기반 정렬을 목록의 `(updated_at, id)` cursor만으로 대체하지 않는다.
 
+2026-10-13 자료함 페이지 번호 요청으로 **자료 목록만** `totalCount`와 `pageSize`를 추가한다. owner·현재 revision·미삭제 조건을 적용한 CTE에서 전체 개수와 해당 페이지를 하나의 SQL 스냅샷으로 읽는다. 총개수 쪽에서 페이지를 LEFT JOIN하므로 빈 자료함·범위 밖 페이지도 정확한 개수를 반환한다. `hasNext`는 전체 개수로 계산한다. keyword 검색의 추가 한 행 방식과 의미 검색의 상위 50개 제한은 유지하며 migration은 필요하지 않다.
+
 동시 등록은 receipt의 `(owner_id, idempotency_key)` 제약으로 판정한다. 승자의 receipt가 확정되면 패자는 자신의 쓰기를 모두 rollback한 뒤 승자 receipt를 한 번 조회한다. 이는 일반 DB 재시도가 아니다. 목록은 `updated_at DESC, id DESC`로 페이지당 기본 20개·최대 50개를 읽는다. 생성 DDL은 `0004_materials.sql`, runtime feature import 없이 연결하는 account FK와 같은 owner/material의 current revision을 강제하는 deferred composite FK는 custom `0005_materials_relational_fences.sql`이 소유한다. Kit snapshot에 표현되지 않는 두 custom FK는 실제 DB 제약 검사로 유지한다.
 
 ### pgvector publication과 검색
@@ -112,6 +117,8 @@ snippet 위치 변환은 grapheme 전체 배열 대신 `Intl.Segmenter.containin
 provider/model/dimension은 semantic 기능 도입 직전 평가로 선택한다. 선택 전 vector column이나 임의 차원을 고정하지 않으며, 선택 후 exact config와 dimension을 migration 및 publication fingerprint에 기록한다. 차원이 다른 vector를 암묵 변환하지 않는다. 초기 index는 정확 검색 또는 측정된 corpus에 맞는 단순 pgvector index로 시작하며 HNSW, reranker와 고급 tuning은 1k/10k corpus query-plan 근거 전에는 도입하지 않는다.
 
 vector는 indexing-owned publication row에 revision/chunk/config fingerprint와 함께 저장되고, PostgreSQL fenced commit만 `PUBLISHED`로 만든다. BullMQ completed 상태는 vector visibility 증거가 아니다.
+
+2026-10-01의 4-a 구현은 Gemini 평가에서 선택한 1,536차원을 `0013_embedding_publication`에 고정한다. `indexing_embedding_vectors`는 owner/work와 owner/material/revision/chunk FK를 가지며 config·consent는 immutable work identity를 통해 연결된다. chunk 목록 전체와 순서·차원·finite/영벡터를 검사한 뒤 vector와 work/attempt 성공 상태를 같은 transaction으로 저장한다. 후속 제품 검색은 이 관계와 현재 동의를 함께 확인한다. 비용 receipt는 usage-retention 소유다. 개발 DB에는 자동 적용하지 않는다.
 
 `search.SearchMaterials`는 모든 keyword/vector/hybrid branch에 다음 predicate를 적용한다.
 
@@ -124,9 +131,15 @@ vector publication is PUBLISHED for the exact chunk/revision/config (vector bran
 
 hybrid 검색은 keyword와 vector 후보를 안정적 chunk identity로 dedupe하고 deterministic tie-break를 사용한다. vector가 미준비/실패/비동의/예산 차단이면 keyword 결과와 이유가 있는 semantic-degraded 상태를 반환한다. vector branch 장애 때문에 keyword query 전체를 실패시키지 않는다. reader도 같은 owner/current/deleted predicate로 원문과 저장 메모를 분리해 반환한다.
 
+Phase 2 제품 구현은 exact cosine 검색으로 시작한다. indexing이 current·owner·미삭제·현재 config/consent·PUBLISHED 조건을 적용하고 자료별 best chunk를 골라 vector 후보를 만든다. hybrid는 keyword/vector 각 최대 51개 후보를 `(materialId, revisionId)`로 합치고 RRF `k=60`을 사용한다. 최종 자료 본문 조회의 한 SQL snapshot에서 owner/current/deleted를 다시 검사해 두 branch 사이 수정·삭제 결과를 제외한다. HNSW·reranker·query vector 저장은 추가하지 않는다.
+
+semantic API는 상위 50개만 반환하고 `truncated`로 더 많은 후보가 있었음을 알린다. `page=1`, `hasNext=false`이며 offset/keyset 후속 페이지는 제공하지 않는다. 이 제한은 keyword 목록의 기존 pagination 계약과 구분한다. query provider 호출 전에 유효한 현재 vector가 하나도 없으면 호출 없이 `index_unavailable` keyword fallback을 제공한다. provider 호출 뒤에도 동의 잠금과 자료 fence를 다시 확인한다.
+
+`0014_embedding_lifecycle`은 activation cursor·scan 시각과 vector cleanup 시각을, `0015_embedding_activation_scope`는 최초 활성화 시각을 추가한다. 최초 활성화 시각은 과거 미선택 자료의 자동 전송을 막는 범위 기준이다. `0016_embedding_retention`은 work의 terminal 시각과 예약의 종료·cleanup 시각을 추가한다. 과거 종료 행은 업그레이드 시각부터 90일을 더 보존하며 원문 revision이나 최소 terminal work identity는 삭제하지 않는다. migration별 실제 적용·검증은 plan에 기록한다.
+
 ### Migration
 
-migration은 `apps/api/drizzle`의 단일 ordered SQL stream으로 관리한다. `apps/api/drizzle.config.ts`가 현재 feature-private `*.schema.ts`를 DDL 입력으로 수집하고 같은 output 경로를 사용한다. schema 파일은 table metadata만 정의하고 Nest bootstrap·pool 생성·환경 secret 검증을 실행하지 않는다. 타입 검사·앱 build와 migration 생성은 DB 연결 없이 가능해야 하며, migration 생성은 앱 build의 부수 효과가 아닌 명시적인 변경 작업이다. 제품 구현 승인 뒤 다음 도구 흐름을 실제 package script로 연결한다. 현재 문서 전환에서는 schema/config/migration 파일을 생성하거나 명령을 실행하지 않는다.
+migration은 `packages/db/migrations`의 단일 ordered SQL stream으로 관리한다. `packages/db/drizzle.config.ts`는 `src/schema/index.ts`를 DDL 입력으로 사용한다. schema 파일은 table metadata만 정의하고 Nest bootstrap·pool 생성·환경 secret 검증을 실행하지 않는다. 타입 검사·앱 build와 migration 생성은 DB 연결 없이 가능해야 하며, migration 생성은 앱 build의 부수 효과가 아닌 명시적인 변경 작업이다. 루트 `db:generate`·`db:migrate` 명령은 db 패키지로 연결한다. 로컬 migrate의 env 선택은 기존 API `.env.dev/.env.prod`를 유지하며 실행기는 단일 DB 적용 주체다.
 
 1. backend 내부 Drizzle schema에서 현재 phase에 필요한 table, column, FK/unique/index를 정의한다.
 2. `drizzle-kit generate`로 SQL migration과 관련 metadata를 생성한다. pgvector extension 설치, 지원되지 않는 DDL과 data backfill은 필요할 때 `generate --custom`으로 같은 stream의 명시적인 SQL migration에 추가한다.
@@ -151,6 +164,14 @@ Drizzle Kit가 자동 down/rollback을 제공한다고 가정하지 않는다. �
 - pgvector가 관계형 owner/current/deleted predicate와 같은 query에 있어 별도 vector store의 동기화 문제가 없다.
 
 ## Verification
+
+### 답변과 공용 예산 schema — 2026-10-07
+
+`answers`는 `answer_requests`와 `answer_call_attempts`, `usage-retention`은 별도 `usage_answer_consents`와 공용 비용 예약을 소유한다. 기존 `usage_embedding_reservations` 이름은 데이터 이동을 피하려고 유지하되 `purpose`로 embedding/grounded-answer를 구분한다. request 중복 제약도 `(owner_id, purpose, request_id)`이며 두 목적의 같은 UUID는 충돌하지 않는다. 예산 상한은 동일 월 예산 행을 잠근 뒤 전체 합계와 목적별 합계를 함께 검사한다.
+
+답변 attempt의 `(owner_id, request_id)` unique 제약은 현재 무료 정책의 단일 호출을 강제한다. 질문·근거·답변 정리는 상태 전이와 분리하며, 최소 receipt가 남아 있는 동안 같은 ID로 자동 재생성하지 않는다. `answer_requests(scan_after, request_id)`는 실행뿐 아니라 보존 정리 회차에도 사용한다. migration 0017~0020이 work 예약 조회 인덱스, 목적·사용량, 답변·동의 테이블과 제약을 추가한다. 개발 DB 적용은 명시적으로 수행하며 테스트는 격리 DB만 사용한다.
+
+### 검증 항목
 
 - 실제 PostgreSQL에서 owner당 현재 refresh 한 개, 새 로그인의 교체, 동시 refresh CAS의 단일 성공, 고정 만료 보존과 logout 삭제를 검증한다. 검증한 JWT 원문은 DB와 telemetry에 남기지 않는다.
 - 실제 Drizzle adapter와 PostgreSQL integration으로 save 각 단계 fault injection의 all-or-none, idempotency same/different fingerprint, concurrent expected-revision CAS와 old revision 비노출을 확인한다. 여러 참여 port가 같은 `tx`를 사용하고 중간 실패가 모든 쓰기를 rollback하는지 검증한다.

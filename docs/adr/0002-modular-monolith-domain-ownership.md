@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-09-12
-- Updated: 2026-09-19 — 승인된 모듈 구조 유지, Repository 페이지·원자 저장 계약 정리
+- Updated: 2026-10-01 — semantic 검색의 공개 API 조합과 scanner 기반 누락 활성화
+- Updated: 2026-09-22 — 로그인·활성화 책임 분리와 worker 실행·복구의 기능 협력
 - Canonical owner: 여섯 feature의 상태·전이 소유권, 내부 의존 DAG, public choreography
 
 ## Context
@@ -13,13 +14,15 @@ devfootnote의 저장은 revision, chunk, keyword projection, idempotency와 emb
 
 백엔드는 `apps/api/src/modules`의 기능별 모듈러 모놀리스다. 구조를 섞는 단위는 모듈이다. auth/search/health는 기본 레이어드, materials는 presentation → application → domain 방향의 라이트 헥사고날로 구성한다. materials infrastructure는 application 저장 포트를 구현하며 SQL·CAS·원자 저장을 소유한다. Domain은 Nest/ORM에 의존하지 않고 application은 DI를 위한 Nest 사용만 허용한다.
 
-Controller는 HTTP, Service는 업무 규칙과 흐름, Repository는 저장 책임을 맡는다. auth의 기존 Repository와 materials의 원자 저장 구현을 유지하고 단순 조회용 search에는 별도 Repository를 만들지 않는다. search는 materials의 `findKeywordCandidates` 공개 조회로 필요한 projection을 요청한다. JOIN 최적화는 materials 저장소 안에서 수행하며 다른 모듈 schema를 가져오지 않는다.
+Controller는 HTTP, Service는 업무 규칙과 흐름, Repository는 저장 책임을 맡는다. auth의 기존 Repository와 materials의 원자 저장 구현을 유지하고 search에는 별도 Repository를 만들지 않는다. search는 materials의 keyword·현재 자료 공개 조회, indexing의 게시된 vector 후보 조회, usage-retention의 query 동의·예약·정산을 조합한다. SQL은 각 table owner의 Repository에 남기며 search가 다른 모듈 schema를 직접 가져오지 않는다.
+
+materials 내부에서는 `MaterialsRepository`가 생성·수정·삭제와 원자 작업의 receipt·revision 잠금을, `MaterialsQueryRepository`가 목록·현재 원문·keyword 후보 조회를 맡는다. application은 두 포트만 사용하고 Drizzle 구현은 infrastructure에 둔다. `MaterialsService`와 feature 외부의 공개 계약은 유지하며 별도 ReaderService·CommandBus·QueryBus는 추가하지 않는다. SELECT라도 receipt 재조회·현재 revision 잠금처럼 원자성에 참여하는 작업은 쓰기 저장소에 남긴다. 활성화의 current intent 조회·잠금도 기존 저장소에 함께 유지한다.
 
 2026-09-19 계약 정리: materials Service는 원문 준비·업무 fingerprint를 계산하고 작업별 입력 객체를 저장 포트에 전달한다. receipt UNIQUE 경쟁 판정·전체 rollback·확정 receipt 재조회는 Repository 내부 절차이며 application 포트에 `ReceiptRace`나 `readReceipt`를 노출하지 않는다. 목록·검색 후보는 공통 `PageResult<T> { items, hasNext }`를 반환한다. 다음 페이지 판정을 위한 추가 한 행은 Repository만 알고 소비자에게 넘기지 않는다. HTTP의 `page`와 기존 응답 envelope는 유지한다. 승인된 레이어드/라이트 헥사고날 선택을 변경하거나 전달용 계층을 추가하는 작업은 아니다.
 
 외부 연동 장애 격리·복잡한 독립 규칙·복수 저장 구현이 실제로 필요해질 때 해당 모듈만 라이트 헥사고날로 승격한다. 기능마다 interface/UseCase/mapper를 의무화하지 않는다.
 
-Drizzle table·relation은 각 feature의 private `*.schema.ts`가 정의하고 상태 전이의 소유권은 아래 여섯 feature로 유지한다. Drizzle Kit가 여러 schema를 수집해 하나의 SQL migration stream을 만든다는 이유로 다른 feature의 table/relation을 조회·수정하지 않는다. 그런 사실이 필요하면 상대 feature의 공개 업무 메서드로 요청한다. schema 수집은 DDL metadata 조합일 뿐이며 table·추론한 row type을 HTTP DTO나 frontend와 공유하지 않는다.
+Drizzle table 정의는 Phase 2부터 `packages/db/src/schema`에 함께 두고 상태 전이의 소유권은 아래 여섯 feature로 유지한다. DDL·런타임 schema를 공유한다는 이유로 다른 feature의 table/relation을 조회·수정하지 않는다. 그런 사실이 필요하면 상대 feature의 공개 업무 메서드로 요청한다. table·추론한 row type을 HTTP DTO나 frontend와 공유하지 않는다. API와 worker의 indexing 저장소는 같은 indexing owner의 서로 다른 전달·claim 경로다. 앱 간 private 소스를 import하거나 worker indexing에서 materials table을 직접 조회하지 않는다.
 
 **public port는 공개 업무 API라는 의미다.** 다음 표의 이름은 행동 계약이며 각각의 추상 interface나 독립 class를 요구하지 않는다. 예를 들어 `SaveMaterial`은 공개 `MaterialsService.saveMaterial()`로 구현할 수 있고 Nest Module이 그 Service를 export할 수 있다. composition root와 다른 feature는 해당 모듈의 index.ts를 통해 그 메서드를 호출한다. 공개 Service는 승인된 업무 메서드와 필요한 값·결과·error 계약만 노출하고 내부 helper·Repository·schema/row type·DB token·Pool/query-builder handle은 노출하지 않는다. 범용 `execute(command)` dispatcher나 상속 기반 CRUD 틀은 추가하지 않는다.
 
@@ -42,17 +45,31 @@ answers  ──> materials
 answers  ──> usage-retention
 search   ──> materials
 search   ──> indexing
+search   ──> usage-retention
 indexing ──> materials
+indexing ──> usage-retention
 auth (no feature dependency)
 usage-retention (no feature dependency)
 materials (no feature dependency)
 ```
 
-위 graph는 업무 의존이다. presentation의 인증 요청 타입·Public decorator와 공통 오류 filter는 auth/materials의 공개 index를 사용할 수 있다. health는 여섯 업무 owner에 포함되지 않는 기술 모듈이다. 각 feature Module은 내부 DatabaseModule을 통해 프로세스당 하나인 bounded `pg.Pool`과 Drizzle 인스턴스를 공유한다. Service가 규칙·실행 순서·원자 작업 범위를 소유하고, 자기 table의 query는 Service 또는 필요에 따라 분리한 Repository가 구현한다. 원자 작업은 동일한 `db.transaction(async (tx) => ...)`의 `tx`로 수행하며 기본 `db`, `pool.query`나 별도 transaction으로 빠져나가지 않는다. 현재 auth/materials 원자 쓰기는 각각의 Repository 메서드 안에서 완결한다. materials application에는 DB/tx 객체를 전달하지 않는다. Repository를 반드시 거치기 위해 token 발급 등의 업무 callback을 전달하는 구조를 새로 만들지는 않는다. 어느 방식이든 외부 network I/O와 DB handle 공개는 금지한다. 여러 public port가 참여하는 원자 작업은 같은 scoped transaction을 내부에서 사용하며 메서드별로 따로 commit하지 않는다. API controller·worker processor는 Pool/Drizzle DB를 직접 주입받거나 생성하지 않는다.
+위 graph는 업무 의존이다. presentation의 인증 요청 타입·Public decorator와 공통 오류 filter는 auth/materials의 공개 index를 사용할 수 있다. health는 여섯 업무 owner에 포함되지 않는 기술 모듈이다. 각 feature Module은 내부 DatabaseModule을 통해 프로세스당 하나인 bounded `pg.Pool`과 Drizzle 인스턴스를 공유한다. Service가 규칙·실행 순서·원자 작업 범위를 소유하고, 자기 table의 query는 Service 또는 필요에 따라 분리한 Repository가 구현한다. 원자 작업은 동일한 transaction 연결로 수행하며 기본 `db`, `pool.query`나 별도 transaction으로 빠져나가지 않는다. materials 원자 쓰기는 Repository의 `db.transaction` 안에서 완결하고 application에 DB/tx 객체를 전달하지 않는다. 로그인과 활성화는 아래의 Service 소유 scoped transaction을 사용한다. 저장소에는 token 발급 등의 업무 callback을 전달하지 않는다. 어느 방식이든 외부 network I/O와 DB handle 공개는 금지한다. 여러 public port가 참여하는 원자 작업은 같은 scoped transaction을 내부에서 사용하며 메서드별로 따로 commit하지 않는다. API controller·worker processor는 Pool/Drizzle DB를 직접 주입받거나 생성하지 않는다.
 
 ### 트랜잭션 전파 도입 기준
 
-현재 저장이 Repository 메서드 하나에서 끝나므로 CLS는 도입하지 않는다. 여러 Repository/공개 업무 메서드의 쓰기를 한 commit으로 묶어야 하는 첫 기능에서 scoped transaction 또는 CLS를 결정한다. 읽기·멱등 receipt 재조회가 여러 번이라는 이유만으로 위반으로 판정하지 않는다. import 검사는 application의 DB/adapter 접근을 막고, 원자성 자체는 중간 실패 rollback·동시 CAS 통합 테스트로 확인한다. auth의 로그인 transaction 안 토큰 발급 callback은 기존 원자성을 보존하기 위해 유지하며 일반적인 Repository 확장 패턴으로 복제하지 않는다.
+Phase 2의 2단계부터 동의·예약·work 생성은 이 DAG를 따라 동일 scoped transaction으로 묶는다. `EmbeddingActivationService`가 `TransactionHost.withTransaction`으로 범위를 소유하고, materials의 current revision 잠금과 usage-retention의 동의·예약 공개 메서드는 `@nestjs-cls/transactional`의 Drizzle adapter로 같은 연결에 참여한다. 쓰기 협력 메서드는 `Propagation.Mandatory`로 독립 commit을 금지한다. 활성화 진입점은 `Propagation.Never`로 바깥 transaction에 합류하지 않으며 자신의 commit 이후에만 Redis로 전달한다. worker claim은 여전히 indexing table의 단일 조건부 UPDATE이고 consumer는 DB handle을 알지 않는다.
+
+3단계의 worker 실행·복구도 같은 Drizzle adapter를 쓰되 이름 있는 `worker` transaction 연결을 사용한다. API와 worker를 같은 검증 프로세스에 조립해도 default transaction host를 공유하지 않는다. `EmbeddingExecutionService`가 원자 전이를 소유하고 worker의 materials·usage-retention 공개 Service는 활성 transaction에 참여한다. 잠금 순서는 **consent → material → budget → reservation → work**다. API의 새 비용 예약과 worker의 호출 노출 기록이 같은 budget 행에서 직렬화되어, 만료 직전 STARTED와 새 admission이 같은 금액을 중복 사용하지 못하게 한다. 잠금 대기 뒤 만료 여부는 DB의 현재 시각으로 다시 판정한다.
+
+attempt 시작·실패·복구·publication의 업무 판정은 indexing에, current revision은 materials에, 동의·예약·노출·정산·만료 처리는 usage-retention에 둔다. Repository는 자기 테이블의 SQL/CAS만 소유하고 Service는 상대 기능의 저장소나 DB handle을 받지 않는다. scanner의 bounded batch 선점 transaction을 먼저 commit한 뒤 각 work를 이 순서로 검증하며, Redis 전달은 모든 transaction 밖에서 수행한다. 실행 processor는 STARTED commit 뒤 provider를 호출하고 별도 publication transaction으로 결과를 넘긴다. query 검색도 예약 노출 commit·외부 호출·정산·최종 동의/자료 조회를 구분한다.
+
+활성화는 여러 공개 메서드의 쓰기를 한 commit으로 묶는 첫 기능이어서 CLS를 도입했다. HTTP 요청 전체를 transaction으로 감싸거나 tracing 계층으로 확장하지 않는다. 읽기·멱등 receipt 재조회 횟수만으로 위반을 판단하지 않으며, import 검사와 별개로 중간 실패 rollback·실제 DB 잠금 경쟁·다른 연결에서 commit 관찰을 검증한다.
+
+2026-09-22 책임 분리에서는 로그인 한 흐름에도 기존 CLS를 재사용한다. `AuthService.completeLogin`이 계정 조회·생성 → 로컬 JWT 발급·해시 → 현재 refresh 저장을 같은 `withTransaction`으로 묶고 commit 뒤에만 토큰을 반환한다. 진입점은 바깥 transaction에 합류하지 않고, Repository의 두 저장 메서드는 `Mandatory`로 같은 연결을 요구한다. Repository는 원문 JWT·SessionTokens·발급 callback을 받거나 TokenService에 의존하지 않는다. HS256 서명은 로컬 연산이며 Google network I/O는 계속 transaction 밖이다. begin/commit 오류까지 transaction 호출 바깥에서 정제한다. OAuth state transaction·refresh CAS·logout과 materials 저장 경계를 일괄 전환하지 않는다.
+
+활성화의 대상 정규화·중복 검사·fingerprint는 indexing의 순수 준비 함수로, preview와 활성화의 최대 비용 계산은 usage-retention의 가격 정책 함수로 모은다. Service에는 동의·receipt·revision·예약·work의 원자 처리 순서와 commit 뒤 전달을 명시적으로 남긴다. 함수마다 별도 Injectable Service나 범용 policy framework를 만들지 않는다.
+
+2026-10-06에는 API·worker가 실제로 중복 사용하던 예산 행 잠금·합산·예약 INSERT를 `packages/db/usage-retention/budget-reservation` 전용 subpath로 모았다. 범용 Repository가 아니라 usage-retention 소유의 구체 저장 연산이며 앱의 usage Repository만 접근한다. 입력은 활성 transaction과 필요한 값뿐이고 Nest·provider 선택·HTTP 오류 정책은 받지 않는다. 원자 업무의 Service 소유권과 앱별 실패 표현은 유지한다. 같은 패키지의 `indexing-policy`는 DB CHECK와 worker가 공유하는 순수 상태·실패 종류·시도 상수만 노출하며 테이블을 노출하지 않는다.
 
 ### 계층별 책임과 적용 수준
 
@@ -65,6 +82,20 @@ materials (no feature dependency)
 | feature Repository (필요 시) | 복잡하거나 재사용되는 Drizzle/SQL·CAS·저장 단위 | HTTP 응답, cookie, 외부 provider 호출, 다른 feature private table |
 | protocol adapter (필요 시) | 표준 client 연결과 실제 외부 실패 격리 | 라이브러리 검증 재구현, 이름만 전달하는 추상 계층 |
 | Module | 실제 dependency·provider 조립 | 업무 흐름 실행이나 import 시 background 작업 시작 |
+
+### 현재 코드를 읽는 순서
+
+| 흐름 | 시작점과 다음 책임 |
+|---|---|
+| 로그인·refresh | `auth.controller` → `AuthService`; 로그인은 Service transaction 안에서 Repository 저장·TokenService 발급을 조합하고 refresh는 기존 CAS 유지 |
+| Passport 인증 | `AuthModule`의 Guard/Strategy 등록 → 해당 Guard → Strategy; Google state·redirect는 Guard/Controller의 HTTP 책임 |
+| 자료 저장·수정 | `materials/presentation` → `application/MaterialsService` → 저장 포트 → `infrastructure/DrizzleMaterialsRepository`; 순수 원문 규칙은 `domain` |
+| 검색 | `SearchService` → materials 공개 후보 조회 → `MaterialsQueryRepository` 포트의 Drizzle 조회 구현 |
+| 의미 검색 활성화 | `EmbeddingActivationService` → materials·usage 공개 메서드의 동일 transaction → commit 뒤 delivery; 실제 provider 처리는 별도 승인 slice |
+| worker 실행·복구 | `EmbeddingExecutionService` → worker materials·usage 공개 fence → indexing의 attempt/work CAS; `EmbeddingRepairService`는 선점·복구 뒤 큐 전달 |
+| 오류 응답 | 각 모듈 오류 → `http/filters/domain-error-response` → `GlobalExceptionFilter`의 공통 정제·응답 |
+
+auth의 Guard는 Passport 진입·state·접근 경계를, Strategy는 provider/JWT 해석을, AuthService·Repository는 로그인·회전과 저장을 맡는다. 같은 폴더의 CsrfService는 업무 Service가 아니라 `configureApp`에서 연결하는 HTTP 보안 adapter다. 파일 개수를 줄이려고 이 책임을 Controller 하나에 합치거나, 다른 모듈과 폴더 모양을 맞추려고 UseCase·port를 추가하지 않는다. 계정별 refresh CAS와 로그인 transaction을 유지하면서 실제 변경 책임이 생길 때만 분리한다.
 
 ### 참고 사례의 채택 범위
 
@@ -84,7 +115,7 @@ BullMQ processor와 scheduler는 `apps/worker`만 등록한다. 공유 backend M
 2. 인증 owner, request idempotency와 update의 expected-current-revision CAS를 확인한다.
 3. material/new revision, 모든 chunk, keyword projection, current revision pointer, request receipt와 immutable durable embedding intent를 all-or-none으로 기록한다.
 4. PostgreSQL commit이 save 성공의 유일한 동기 effect evidence다. Redis enqueue 또는 embedding을 기다리지 않는다.
-5. owner에게 승인된 current semantic activation config/consent epoch가 있을 때만 commit 뒤 API가 `indexing.ActivateCurrentEmbeddings`에 새 intent ID를 best-effort로 알린다. 활성화가 없으면 immutable intent만 남고 work·enqueue·provider call은 0건이다.
+5. 현재 구현은 저장 응답 경로에 indexing 호출을 추가하지 않는다. worker의 bounded lifecycle scanner가 유효한 owner activation의 최초 활성화 시각 이후 저장·수정된 current intent만 찾아 동의·자료·예산을 재검사하고 누락 work를 만든다. 사용자 명시 활성화의 현재 선택 자료는 API가 같은 규칙으로 work를 만든다. 활성화가 없거나 선택하지 않은 과거 자료라면 intent만 남고 자동 work·enqueue·provider call은 0건이다.
 6. activation transaction이 work를 commit한 뒤 `indexing.DeliverIntent` 또는 repair scanner가 그 work ID를 전달한다. `indexing`은 delivery/lease/attempt를 소유하고 provider network call을 transaction 밖에서 수행한다. publication은 owner, current revision, deletion, intent/config/consent epoch, lease token과 attempt fence를 다시 확인하는 PostgreSQL CAS로만 성공한다.
 
 `materials`가 indexing 모양의 chunk와 intent row까지 소유하는 것은 원자 save와 AI/Redis 독립 keyword 경로를 보존하기 위한 의도적 선택이다. `indexing`은 이 row를 직접 변경하지 않는다. 필요한 사실은 immutable intent payload 또는 `CheckRevisionFence`로 받는다.
@@ -99,7 +130,7 @@ post-call `PublishFencedAnswer`는 request 상태/만료, authenticated owner, r
 
 ### 금지된 경계
 
-- `common`에서 feature·HTTP composition으로의 의존, feature에서 `http/` composition으로의 역방향 의존. `http/filters/GlobalExceptionFilter`만 앱 조립 책임으로 공개 feature 오류를 알고 HTTP 정책을 적용한다. 이는 결합 제거가 아닌 의도적인 중앙 조립이며, 도메인에 HTTP 상태를 넣거나 범용 오류 registry를 도입하지 않는다. indexing·answers 도입 시 매핑 소유권을 다시 검토한다.
+- `common`에서 feature·HTTP composition으로의 의존, feature에서 `http/` composition으로의 역방향 의존. `http/filters`의 전역 필터와 인접 업무 오류 매핑만 앱 조립 책임으로 공개 feature 오류를 알고 HTTP 정책을 적용한다. 이는 결합 제거가 아닌 의도적인 중앙 조립이며, 도메인에 HTTP 상태를 넣거나 범용 오류 registry를 도입하지 않는다.
 - 다른 feature의 Repository, table/relation schema, transaction implementation, 내부 provider 또는 비공개 Service 메서드 접근; 공개된 업무 Service 메서드는 위 DAG에 따라 호출할 수 있다
 - public port가 Repository·DB/Pool/query-builder handle 또는 범용 SQL 실행기를 반환하는 것
 - 별도 일곱 번째 save/workflow module 또는 generic coordinator가 private store를 조정하는 것

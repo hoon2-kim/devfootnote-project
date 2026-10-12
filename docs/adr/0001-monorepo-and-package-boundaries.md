@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-09-12
-- Updated: 2026-09-18 — API 내부 기능 모듈 통합·선택적 라이트 헥사고날·worker 공유 기준
+- Updated: 2026-10-01 — 실제 API·worker 소비자를 위한 AI 공유 패키지와 lifecycle 경계
+- Updated: 2026-09-22 — worker 실행·복구의 기능 소유권과 transaction 경계
+- 문서 정리: 2026-09-30 — 현재 계약·실행 기록 분리; 제품 검증 재실행 없음
 - Canonical owner: workspace 구조, 패키지 의존성 DAG, import 경계와 로컬 개발 실행 구성
 
 ## Context
@@ -21,7 +23,7 @@ Next가 관리하는 `next-env.d.ts`는 Git/Docker context에서 제외하고 �
 
 Drizzle schema는 backend TypeScript 소스와 함께 빌드한다. Drizzle Kit의 SQL migration 생성·검토·적용은 명시적인 DB 변경 작업이며 일반 build의 선행 작업이나 숨은 부수 효과로 실행하지 않는다. DB 연결이나 실제 credential 없이 backend와 이를 사용하는 API/worker를 빌드할 수 있어야 한다.
 
-현재 백엔드 업무 코드의 소비자는 API 하나다. 기존 `packages/backend`를 제거하고 HTTP·업무·저장을 `apps/api/src/modules`의 같은 기능 안에 배치한다. 모노레포라는 이유로 앱 전용 코드를 packages로 분리하지 않는다.
+Phase 1에서 `packages/backend`를 제거하고 HTTP·업무·저장을 `apps/api/src/modules`의 같은 기능 안에 배치했다. Phase 2의 실제 worker claim 소비자가 생겨 전체 DB 정의·연결 팩토리와 queue 계약만 공유한다. 모노레포라는 이유로 앱 전용 업무 코드를 packages로 분리하지 않는다.
 
 ```text
 apps/
@@ -31,9 +33,6 @@ apps/
     components/ui/             # 웹 UI
     lib/                       # 생성 API client 연결
   api/
-    drizzle/                   # 모든 SQL·snapshot·journal: 단일 migration 이력
-    drizzle.config.ts
-    scripts/migrate.mjs
     src/
       main.ts
       app.module.ts
@@ -48,7 +47,6 @@ apps/
           index.ts
           auth.module.ts
           auth.controller.ts
-          auth.schema.ts
           dto/response/
           guards/
           strategies/
@@ -66,8 +64,9 @@ apps/
             materials.service.ts
             materials.types.ts
             ports/materials.repository.ts
+            ports/materials-query.repository.ts
           domain/              # Nest·ORM 없는 본문 규칙·값·오류
-          infrastructure/      # Drizzle 저장 구현·schema
+          infrastructure/      # Drizzle 원자 저장·일반 조회 구현
         search/                # 레이어드; materials 공개 조회 사용
           index.ts
           search.module.ts
@@ -79,20 +78,39 @@ apps/
           health.module.ts
           health.controller.ts
           health.service.ts
+        indexing/              # 활성화·work 생성·commit 뒤 lazy producer
+        usage-retention/       # 동의·예산 예약
+  worker/src/
+    main.ts                    # HTTP 없는 Nest application context
+    worker.module.ts
+    config/
+    infrastructure/            # worker Pool·이름 있는 CLS transaction·안전한 로그
+    modules/
+      indexing/                # claim consumer·실행 상태·repair
+      materials/               # 현재 revision·삭제 fence 조회
+      usage-retention/         # 동의·예약 fence·비용 노출·미노출 예약 만료
 packages/
+  ai/src/                      # API·worker 공유 Gemini 전송·승인 정책·fingerprint
   api-client/                  # OpenAPI 생성 SDK·타입
+  db/
+    src/schema/                # auth·materials·indexing·usage 전체 DDL·런타임 schema
+    src/client.ts              # Nest 없는 Pool·Drizzle 생성 팩토리
+    migrations/                # 모든 SQL·snapshot·journal: 단일 이력
+    scripts/migrate.mjs
+    drizzle.config.ts
+  queue/src/index.ts           # 큐·job 이름, work ID payload·claim 전달 결과
 tests/                         # HTTP·실제 DB·브라우저 흐름
 ```
 
-현재 workspace edge는 `apps/web → packages/api-client` 하나다. API 업무 코드는 API 내부에 있으며 앱 사이 import는 금지한다. 웹은 Nest DTO·Service·DB schema를 import하지 않는다. `api-client`의 공개 entry는 `@devfootnote/api-client`와 `@devfootnote/api-client/client`만 유지한다. OpenAPI가 HTTP 계약이고 별도 contracts/zod 공유 패키지를 중복 도입하지 않는다.
+현재 workspace edge는 `web → api-client`, `API/worker → db·queue·ai`다. `ai`는 실제 두 소비자인 API query와 worker chunk가 사용하는 Gemini 전송·승인 정책·fingerprint를 공유하며 Nest·앱·DB를 import하지 않는다. 동의·예산 admission과 상태 전이는 앱의 기능 내부에 남기고 provider 호출에 DB handle을 넘기지 않는다. 앱 사이 import는 금지한다. 웹은 Nest DTO·Service·DB schema·AI key를 알지 않는다. `api-client`의 공개 entry는 `@devfootnote/api-client`와 `@devfootnote/api-client/client`만 유지한다. OpenAPI가 HTTP 계약이고 별도 contracts/zod 공유 패키지를 중복 도입하지 않는다.
 
-다른 기능은 `modules/<feature>/index.ts`에서 공개한 Module·Service·값/오류 타입만 import한다. Nest Module의 exports와 소스 import 경계를 모두 지킨다. Repository·schema·DB handle은 공개하지 않는다. feature 내부는 자기 index를 거치지 않는 직접 import로 순환을 피한다. 실제 HTTP에 필요한 auth의 Public decorator·요청 타입·CSRF 연결 공개는 업무 DAG와 구분한다. 공통 filter는 공개 업무 오류를 HTTP로 변환할 수 있다.
+다른 기능은 `modules/<feature>/index.ts`에서 공개한 Module·Service·값/오류 타입만 import한다. Nest Module의 exports와 소스 import 경계를 모두 지킨다. Repository·schema·DB handle은 공개하지 않는다. feature 내부는 자기 index를 거치지 않는 직접 import로 순환을 피한다. 실제 HTTP에 필요한 auth의 Public decorator·요청 타입·CSRF 연결 공개는 업무 DAG와 구분한다. 앱 조립 영역인 `http/filters`는 공개 업무 오류를 HTTP로 변환할 수 있고 `common`은 feature를 알지 않는다.
 
 auth/search/health는 레이어드, materials만 application의 좁은 저장 포트와 infrastructure 구현을 구분한다. 전달만 하는 UseCase·BaseRepository·범용 mapper를 추가하지 않는다. root infrastructure는 연결·로그의 기술 구성을 제공하며 업무 정책을 import하지 않는다. materials의 infrastructure는 같은 모듈 application 포트를 구현하므로 이를 root infrastructure와 혼동하지 않는다. 자세한 owner·transaction 규칙은 [ADR-0002](0002-modular-monolith-domain-ownership.md)를 따른다.
 
 ### Worker 도입 시 공유 범위
 
-`apps/worker`는 Phase 2에서 실제 실행 기능과 함께 만든다. 같은 DB를 사용하게 되면 **전체 schema·migration 이력·Kit 설정·커넥션 팩토리를 한 번에 `packages/db`로 이동**한다. 일부 schema만 분리하거나 API/worker별 migration stream을 만들지 않는다.
+`apps/worker`는 Phase 2의 실제 PostgreSQL claim 기능과 함께 도입했다. **전체 schema·migration 이력·Kit 설정·커넥션 팩토리를 한 번에 `packages/db`로 이동**했다. 일부 schema만 분리하거나 API/worker별 migration stream을 만들지 않는다.
 
 - DDL 정의·런타임 schema 객체는 공유하지만 테이블 접근은 해당 owner의 Repository로 제한한다.
 - Pool은 공유 프로세스 객체가 아니다. API/worker 각각 bounded Pool을 생성·종료하며 연결 수를 합산한다.
@@ -101,7 +119,11 @@ auth/search/health는 레이어드, materials만 application의 좁은 저장 �
 - 업무 코드는 양쪽에 실제 동일 책임이 있을 때만 별도 패키지로 승격한다. worker가 저장된 immutable chunk를 읽는다면 청킹 규칙을 공유하거나 복사할 필요가 없다.
 - API/worker가 자기 작업용 저장 구현을 별도로 갖더라도 테이블 write owner와 publication fence를 우회하지 않는다. 필요한 공개 협력 코드는 그 slice에서 승격하며 앱 간 소스 import로 연결하지 않는다.
 
-이 단계의 예상 edge는 web→api-client, API/worker→db·queue이며 추가 업무 패키지 edge는 실제 필요와 함께 결정한다. 미래 디렉터리·빈 placeholder는 지금 만들지 않는다.
+추가 업무 패키지는 실제 동일 규칙을 함께 사용할 때 결정한다. 현재 공유 패키지는 CJS·declaration을 dist로 빌드해 exports하며 ESM 전용 중복 빌드를 추가하지 않는다. 앱별 raw TypeScript 실행 차이는 build 의존 순서로 처리한다. `packages/db`는 전체 schema를 Drizzle에 전달하지만 호출자는 해당 기능의 Repository 접근 규칙을 지켜야 한다.
+
+consumer는 PostgreSQL claim 뒤 실행 processor를 기다린다. processor는 STARTED commit 뒤 Gemini를 호출하고 게시·정산 transaction을 마친 뒤 반환한다. worker의 materials·usage-retention은 자기 테이블의 fence·예약 사실을 공개 Service로 제공하고 indexing이 원자 전이를 조합한다. API의 CRUD·활성화와 worker의 실행 책임은 다르므로 같은 이름의 기능을 앱 간 import하거나 별도 업무 패키지로 옮기지 않는다. `packages/ai`의 순수 설정·외부 전송만 공유한다.
+
+API producer와 worker repair producer는 첫 전달 때만 Redis를 연결하며 API bootstrap과 core HTTP는 Redis에 의존하지 않는다. consumer·repair·lifecycle scheduler는 worker만 등록한다. Gemini key가 없으면 승인 설정을 만들지 않고 새 활성화·provider 실행·작업 전달을 하지 않는다. 단, 15초 주기의 만료 정산·벡터·상세 기록 정리는 키가 없어도 유지해 기존 데이터의 보존 계약을 지킨다. 키가 있어도 현재 동의·예약 없이 호출하지 않는다. API·worker Pool은 각각 최대 5개다.
 
 ### 로컬 개발 실행 구성
 
@@ -109,18 +131,16 @@ auth/search/health는 레이어드, materials만 application의 좁은 저장 �
 
 파일명은 `docker-compose.yml`을 사용하되 CLI는 현재 Docker Compose plugin의 `docker compose`를 기준으로 한다. 파일명 선택이 legacy `docker-compose` 실행 파일 사용을 뜻하지 않으며 구체 명령은 구현된 설정에 맞춰 기록한다.
 
-- 호스트 개발 주소는 web `http://127.0.0.1:3000`, API `http://127.0.0.1:8000`이다. Next rewrite가 `/api/v1/:path*`를 API의 같은 경로로 전달해 브라우저는 상대 경로만 사용한다. 이 고정 개발 주소를 위한 추가 환경 옵션이나 별도 proxy 제품은 도입하지 않는다. same-origin cookie 계약과 ADR-0005의 localhost HTTP 개발 예외를 적용하며 운영 HTTPS·컨테이너 proxy는 해당 후속 slice에서 검증한다.
-- 일상 개발의 기본 의존성은 Phase 0·1부터 pgvector를 지원하는 PostgreSQL 컨테이너다. 이미지 지원과 벡터 기능 사용은 구분하며, vector column·차원·의미 검색은 Phase 2의 AI 도입 gate 뒤에만 추가한다. Phase 2에서 Redis 서비스를 추가하고, 그때 도입하는 worker도 호스트에서 실행한다. Phase 1부터의 선택 `app` profile은 아래 이미지 검증 구성으로 구분한다. Redis나 worker 없이 첫 저장·keyword 검색·읽기 여정이 동작해야 한다.
-- 이미지의 PostgreSQL·pgvector·Redis 버전은 해당 도입 단계에 호환성을 확인해 고정한다. 개발용 공개 포트는 loopback에만 바인딩하고 운영 credential을 사용하지 않는다. 앱의 연결 설정은 호스트에 공개된 주소·포트를 사용한다.
-- PostgreSQL 개발 데이터는 named volume으로 유지한다. 일반적인 중지·재시작과 volume 삭제·DB 초기화를 구분하고 개발 데이터를 자동으로 지우지 않는다. healthcheck와 실제 연결로 필수 PostgreSQL의 준비 상태를 확인한다. Phase 2 이후에도 Redis 전체 성공을 API 기동 조건으로 묶지 않으며, Redis 장애는 큐 기능만 저하시키고 저장·keyword 검색·읽기는 유지한다.
-- Compose 실행을 schema 적용으로 간주하지 않는다. 검토된 Drizzle Kit SQL migration은 [ADR-0003](0003-postgresql-pgvector-drizzle-revisions-and-search.md)에 따라 명시적으로 적용하며, DB 생성만으로 migration 완료를 주장하거나 앱 시작 시 자동 적용하지 않는다.
+- 접속 주소·실행 명령·환경 선택은 [README의 로컬 실행 안내](../../README.md)가 소유한다. Next rewrite의 same-origin 경계를 유지하고 브라우저에는 내부 API 주소를 노출하지 않는다. cookie와 localhost HTTP 개발 예외는 ADR-0005를 따른다.
+- PostgreSQL+pgvector와 Redis는 개발 Compose에서 실행한다. vector column·차원·의미 검색은 별도 AI 도입 gate 이후 범위이며, 이미지에 extension이 있다고 의미 검색을 구현한 것은 아니다. Redis나 worker 없이도 첫 저장·keyword 검색·읽기 여정이 동작해야 한다.
+- 고정 이미지, loopback 포트와 PostgreSQL named volume 보존을 유지한다. migration은 ADR-0003에 따른 명시적인 작업이며 앱 시작에 숨기지 않는다.
 - 자동화된 DB·큐 통합 테스트는 개발 Compose와 별도의 Testcontainers 환경을 사용한다. 격리와 cleanup은 [ADR-0009](0009-verification-observability-and-search-evaluation.md)를 따른다.
 
 ### 앱 이미지와 선택적 통합 실행
 
-Docker는 DB 실행뿐 아니라 빌드 산출물과 실행 환경을 검증하는 데도 사용한다. Phase 1에 `apps/web/Dockerfile`·`apps/api/Dockerfile`, Phase 2에 `apps/worker/Dockerfile`을 추가하는 계획으로 한다. 각 Dockerfile은 monorepo root를 build context로 사용하며 필요한 workspace 의존성까지 빌드한다. multi-stage build로 빌드 도구와 runtime 산출물을 분리하고, runtime은 non-root로 실행한다. root `.dockerignore`로 실제 secret·환경 파일·불필요한 산출물을 제외하며 build argument·image layer에 credential을 넣지 않는다.
+Docker는 DB 실행뿐 아니라 빌드 산출물과 실행 환경을 검증하는 데도 사용한다. Phase 1에 `apps/web/Dockerfile`·`apps/api/Dockerfile`, Phase 2에 `apps/worker/Dockerfile`을 도입했다. 각 Dockerfile은 monorepo root를 build context로 사용하며 필요한 workspace 의존성까지 빌드한다. multi-stage build로 빌드 도구와 runtime 산출물을 분리하고, runtime은 non-root로 실행한다. root `.dockerignore`로 실제 secret·환경 파일·불필요한 산출물을 제외하며 build argument·image layer에 credential을 넣지 않는다.
 
-API·web 빌드는 root/workspace manifest·lockfile·catalog 설정을 먼저 복사해 `pnpm install --frozen-lockfile`을 실행하고, 그 뒤 소스를 복사·빌드한다. 소스만 변경하면 설치 레이어를 재사용한다. workspace나 설치에 영향을 주는 설정·hook을 추가할 때는 소스 복사 이후가 아니라 이 의존성 레이어의 입력에 포함한다. 2026-09-19 로컬 API·web 재빌드에서 install 단계의 `CACHED`와 실제 HTTPS 이미지 여정 통과를 확인했다. migration target의 경량화·registry push는 이번 변경에 포함하지 않았다.
+API·web 빌드는 root/workspace manifest·lockfile·catalog 설정을 먼저 복사해 `pnpm install --frozen-lockfile`을 실행하고, 그 뒤 소스를 복사·빌드한다. 소스만 변경하면 설치 레이어를 재사용한다. workspace나 설치에 영향을 주는 설정·hook을 추가할 때는 소스 복사 이후가 아니라 이 의존성 레이어의 입력에 포함한다. 당시 설치 레이어 재사용·HTTPS 검증 결과는 [Phase 1 기록](../plans/2026-09-21-phase1-completion.md)에 보존한다.
 
 backend를 포함하는 이미지 build는 TypeScript schema와 backend/app 소스를 빌드하며 DB 연결·DB client 생성·SQL migration 생성/적용을 선행 조건으로 삼지 않는다. runtime에는 해당 앱에 필요한 `pg`·Drizzle runtime 의존성과 컴파일된 backend를 포함한다. 명시적인 migration 단계에는 Drizzle Kit 설정·도구와 검토된 SQL migration 산출물을 준비하며, 이를 모든 앱의 runtime image에 일률적으로 넣거나 build/API/worker startup에서 실행하지 않는다. 대상 DB 주소 확인과 단일 migration 실행 주체는 ADR-0003의 계약을 따른다.
 
@@ -142,8 +162,8 @@ backend를 포함하는 이미지 build는 TypeScript schema와 backend/app 소�
 | HTTP/Passport 연결 | `apps/api` | backend public port 호출과 Google·JWT protocol mapping |
 | queue/scheduler adapter | `apps/worker` | backend public port 호출과 process lifecycle |
 | API client | `packages/api-client` | OpenAPI 생성 client/type, JWT cookie 인증·재발급 transport option |
-| 도메인 규칙과 상태 전이 | `apps/api/src/modules`의 각 feature | ADR-0002의 단일 owner와 public port |
-| DB/queue/AI/관측 기계장치 | `apps/api/src/infrastructure` | policy-free adapter |
+| 도메인 규칙과 상태 전이 | API·worker의 `src/modules` 각 feature | ADR-0002의 단일 owner와 앱별 실행 책임 |
+| DB/관측 기술 구성 | 각 앱의 `src/infrastructure` | policy-free 연결·수명주기·로그 |
 
 ## Consequences
 
@@ -153,7 +173,7 @@ backend를 포함하는 이미지 build는 TypeScript schema와 backend/app 소�
 - 추가 공용 workspace package를 만들기 전 독립 계약과 두 caller를 입증하므로 초기에는 다소 긴 로컬 경로를 감수한다. 생성 HTTP 계약인 `api-client`에는 두 caller를 요구하지 않는다.
 - 익숙한 Nest Module/Service 조립을 사용하되 공개 업무 메서드와 private 저장소의 경계를 검사해야 한다.
 - Turbo와 Docker 설정은 실제 작업·이미지 산출물에 맞춰 유지한다. 로컬 cache와 이미지 smoke 성공은 상태 기반 정합성 검증이나 배포 승인을 뜻하지 않는다.
-- 현재 실행 앱은 web/API이며 worker는 후속 단계다. 하나의 제품·DB 경계이고 분산 transaction을 주장하지 않는다.
+- 현재 실행 앱은 web/API/worker다. 단계별 과거 검증과 provider·검색·화면 통합의 종료 검증은 plan에서 구분한다. 하나의 제품·DB 경계이며 분산 transaction을 주장하지 않는다.
 
 ## Verification
 

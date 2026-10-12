@@ -1,5 +1,7 @@
 # API 기능 모듈 개편
 
+상태: 완료된 개편의 역사 기록. 아래 경로·제외 범위는 2026-09-18 당시 기준이며 현재 구조와 다를 수 있다. 최신 상태와 승인 범위는 [plan](../plan.md#현재-상태)을 따른다.
+
 ## 승인 범위
 
 API·backend에 나뉜 기능을 `apps/api/src/modules`로 통합한다. auth/search/health는 기본 레이어드, materials는 순수 규칙·업무 서비스·저장 port·Drizzle 구현·HTTP 경계를 구분한다. 기능별 공개 진입점과 자동 의존성 검사를 적용하고 응답 envelope 선언을 통일한다. OpenAPI 생성 SDK·인증·자료 API·SQL 동작은 유지한다.

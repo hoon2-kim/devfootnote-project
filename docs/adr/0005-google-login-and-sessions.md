@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-12
+- Updated: 2026-10-01 — 검색 mode 복귀 allowlist와 복귀 시 자동 AI 호출 금지
 - Updated: 2026-09-20 — OAuth 임시 상태 명칭 정리, PostgreSQL 기반 인증 유지
 - Canonical owner: Google OAuth 계정 등록·로그인과 서비스 JWT 발급·검증·재발급·로그아웃
 
@@ -28,7 +29,9 @@ access 만료 → refresh endpoint → JWT 검증 + DB hash CAS → cookie 교�
 logout → 유효한 refresh의 owner 행 삭제 → cookie 삭제
 ```
 
-인증은 `apps/api/src/modules/auth`의 레이어드 모듈 하나로 구성한다. Controller·Guard·Strategy는 HTTP·cookie·Passport를, services의 AuthService·TokenService는 업무·JWT를, repositories의 AuthRepository는 저장을 맡는다. CSRF 연결은 CsrfService, 공개 경로 metadata는 decorators가 소유한다. Module·type·error·schema는 auth 내부에 두고 다른 모듈은 index.ts의 공개 계약만 사용한다. 별도 Identity 플랫폼·중복 AuthModule·전달 Service·application/domain/port 계층을 만들지 않는다.
+인증은 `apps/api/src/modules/auth`의 레이어드 모듈 하나로 구성한다. Controller·Guard·Strategy는 HTTP·cookie·Passport를, services의 AuthService·TokenService는 업무·JWT를, repositories의 AuthRepository는 저장을 맡는다. CSRF 연결은 CsrfService, 공개 경로 metadata는 decorators가 소유한다. Module·type·error는 auth 내부에 두고 schema는 `packages/db`에서 관리하되 auth Repository만 접근한다. 다른 모듈은 index.ts의 공개 계약만 사용한다. 별도 Identity 플랫폼·중복 AuthModule·전달 Service·application/domain/port 계층을 만들지 않는다.
+
+로그인은 `AuthService.completeLogin`이 기존 CLS transaction으로 계정 조회·생성, 로컬 JWT 발급, refresh 해시 저장을 조합한다. 저장소는 owner와 해시·시각만 받고 token 발급 callback이나 원문 JWT를 받지 않는다. 같은 Google 계정의 동시 생성과 bounded cleanup은 기존 SQL 의미를 유지한다. 서명·저장 실패나 DB가 거부한 commit은 계정·refresh 변경을 함께 rollback하며 서비스 cookie를 발급하지 않는다. 연결 유실로 commit 결과가 불명확하면 rollback됐다고 단정하지 않으며, 자동 재시도나 token 반환 없이 로그인 실패로 처리한다. 사용자가 다시 로그인하면 같은 계정을 재사용하고 현재 refresh를 원자 교체한다. token은 commit 성공 확인 뒤에만 Controller로 반환한다. OAuth state·refresh CAS·logout의 기존 경계는 유지하며 상세 전파 규칙은 ADR-0002를 따른다.
 
 최소 구성은 Controller, Module, Google/access/refresh Strategy·Guard, 업무 Service와 필요한 schema다. Google은 `passport-google-oauth20`, JWT는 `passport-jwt`·`@nestjs/jwt`를 Nest Passport에 연결한다. `openid-client`, `oidc-provider`, `@types/oidc-provider`는 이 목표 구성에 포함하지 않는다. Google ID token의 자체 OIDC 검증·discovery/JWKS·nonce·PKCE 구현도 추가하지 않는다. 모든 라이브러리마다 adapter·interface·policy·mapper 파일을 요구하지 않는다. Service는 자기 table의 Drizzle을 직접 사용할 수 있고 transaction·CAS 등 저장 책임이 모이면 Repository로 분리한다. HTTP DTO·cookie·redirect와 응답 envelope는 API 및 ADR-0007이 소유한다.
 
@@ -39,6 +42,8 @@ logout → 유효한 refresh의 owner 행 삭제 → cookie 삭제
 서비스 JWT에는 `@nestjs/jwt`, `@nestjs/passport`, `passport`와 `passport-jwt`를 사용한다. access와 refresh의 Strategy/Guard는 각 JWT 검증을 연결하고 현재 refresh의 DB 대조·원자적 교체는 `auth.RefreshTokens`가 소유한다. 범용 인증 프레임워크, 별도 인증 서비스, RBAC, Redis token store, access denylist, 장치 관리와 token-family 추적은 만들지 않는다.
 
 AlmondYoung에서는 Controller/Service의 역할, Passport Strategy, 전역 `JwtAuthGuard`와 명시적 `@Public()` 패턴만 참고한다. OAuth 서버·다중 client audience·roles/scopes·여러 소셜 계정 연결·Reader/Manager 계층은 가져오지 않는다. 참고 코드의 token 만료 처리·로그·cookie 정책을 그대로 복사하지 않고 사용자 선택인 **refresh JWT**와 아래 계약을 우선한다.
+
+HTTP 요청 타입과 작은 헤더 검사는 `auth.http.ts`에, 쿠키 이름과 읽기·설정 함수는 `auth.cookies.ts`에 모은다. 타입·상수 하나마다 파일을 만들지 않는다. 복귀 경로 allowlist는 독립적인 보안 규칙인 `auth-return-to.ts`로 유지하고 Google/access/refresh Guard·Strategy의 책임은 바꾸지 않는다.
 
 ### 검증 책임과 구현 크기
 
@@ -60,7 +65,7 @@ callback은 Nest의 고정 `/api/v1/auth/google/callback` route와 GoogleStrateg
 
 누락·변조된 callback, 사용자의 Google 동의 취소처럼 `UnauthorizedException` 또는 `AuthError('denied')`로 판정된 거부는 장애 error 로그를 남기지 않는다. provider 통신·예상하지 못한 장애는 기존의 고정된 오류 메시지만 기록하며 원본 예외·code·profile은 남기지 않는다.
 
-`GET /auth/google?returnTo=...`는 `/library`의 page, `/search`의 q/page, `/documents/<uuid>`의 revision UUID와 실제 화면 앵커(`#main-content`, `#note-title`, `#source-title`)만 허용한다. page는 1–100000, q는 최대 200자이며 중복·알 수 없는 query, 외부 URL·역슬래시·제어문자·임의 앵커는 `/library`로 대체한다. 검증한 상대 경로는 5분 state 행의 `return_to`에 저장하며 callback query로 덮어쓰지 않는다. 로그인 페이지는 returnTo를 로그인 시작 경로에 전달할 뿐 직접 redirect하지 않는다. 저장하지 않은 편집 내용은 OAuth 왕복으로 복원하지 않는다.
+`GET /auth/google?returnTo=...`는 `/library`의 page, `/search`의 q/page/mode, `/documents/<uuid>`의 revision UUID와 실제 화면 앵커(`#main-content`, `#note-title`, `#source-title`)만 허용한다. page는 1–100000, q는 최대 200자, mode는 `keyword | vector | hybrid`다. 중복·알 수 없는 query, 외부 URL·역슬래시·제어문자·임의 앵커는 `/library`로 대체한다. 검증한 상대 경로는 5분 state 행의 `return_to`에 저장하며 callback query로 덮어쓰지 않는다. 로그인 페이지는 returnTo를 로그인 시작 경로에 전달할 뿐 직접 redirect하지 않는다. mode 복원은 UI 선택 복원이며 의미 검색의 외부 호출을 자동 시작하지 않는다. 저장하지 않은 편집 내용은 OAuth 왕복으로 복원하지 않는다.
 
 만료 pre-auth와 refresh 정리는 각 생성 transaction에서 **최대 100건**이다. `expires_at` index로 후보를 읽고 `FOR UPDATE SKIP LOCKED`로 다른 transaction이 잠근 행을 건너뛴다. 별도 scheduler·전역 quota는 추가하지 않는다. 정리 실패는 기존 Repository 오류 정책으로 처리하며 같은 transaction의 생성도 rollback한다. commit 후 cleanup 실패를 로그인 실패로 반환하거나 실패를 삼켜 성공으로 바꾸지 않는다. 기존 lock/statement timeout이 대기 상한을 제공한다. 이는 요청별 cleanup 비용 제한이지 공개 로그인 요청의 빈도 제한은 아니다. `0007_auth_expiry_and_return_to.sql`이 복귀 경로 컬럼·만료 index 두 개를 추가하며 API 기동 전에 명시적으로 적용한다.
 

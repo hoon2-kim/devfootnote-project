@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-09-12
-- Updated: 2026-09-20 — 인증 복구·DB 경쟁/수명주기 회귀와 CI 실행 경계 보강
+- Updated: 2026-10-01 — Phase 2 provider·semantic·lifecycle·화면 종료 검증 범위
+- Updated: 2026-09-22 — provider 없는 실행·예약 노출·큐 복구의 검증 범위
+- 문서 정리: 2026-09-30 — 현재 계약·실행 기록 분리; 제품 검증 재실행 없음
 - Canonical owner: 검증 계층, telemetry·health 계약, 검색·답변 품질 및 성능 평가
 
 ## Context
@@ -57,7 +59,7 @@ fake provider는 timeout, 429, malformed output, citation escape, unknown outcom
 
 - `apps/api/src/**/*.spec.ts`: 원문 정규화·분할 등 독립 규칙. Nest source unit을 위해 별도 SWC 변환기를 추가하지 않는다.
 - `tests/*.test.ts`: 공통 HTTP/SDK transport·보안 설정/로그 등 런타임 경계. HTTP는 실제 빌드 산출물을 Node 로더로 읽어 Nest metadata·DI token을 일치시킨다.
-- `tests/*.integration.test.ts`: 실제 API·격리 DB·migration·멱등성·CAS·rollback. Repository mock으로 SQL·제약을 대신하지 않는다.
+- `tests/*.integration.test.ts`: 실제 API/worker·격리 DB/Redis·migration·멱등성·CAS·rollback·repair. Repository mock으로 SQL·제약을 대신하지 않는다.
 - `tests/browser/`: 실제 API/DB를 연결한 핵심 UI 흐름. Google 외부 응답만 fixture로 제어하며 매 실행 실제 Google 로그인은 요구하지 않는다.
 - import 경계는 `pnpm lint:architecture`로 검사한다. 타입/린트가 확인하는 사실을 테스트로 반복하지 않으며 SDK 타입이 실제 JSON을 보장한다고도 해석하지 않는다.
 
@@ -133,6 +135,22 @@ Phase 1 인증 경쟁은 첫 계정 생성·state 소모·refresh CAS·refresh/l
 
 barrier 관찰이 실패해도 blocker를 해제하고 시작한 요청들을 `allSettled`로 정리한 뒤 원래 실패를 전달한다. auth 만료 정리는 OAuth state와 refresh 각각에서 100건 상한·잠긴 만료 행 보존·유효 행 보존을 확인한다. DB lifecycle teardown은 unpause·app close·container stop·환경 복원을 단계별 finally로 분리해 앞 단계 실패가 뒤 정리를 생략하지 않게 한다.
 
+로그인 transaction의 소유권은 Service에 있으므로 토큰 발급 실패·refresh 저장 SQL 실패와 DB가 COMMIT을 거부하는 경계를 실제 DB로 검증한다. 새 계정의 부분 저장 0건, 재로그인 실패 시 이전 refresh 보존, callback의 서비스 cookie 미발급을 확인한다. COMMIT 거부는 deferred constraint trigger로 재현하며, 이 결과를 연결 유실로 commit 결과가 불명확한 경우의 rollback 증거로 확대하지 않는다. 활성화의 대상 정규화·fingerprint와 bigint 비용 계산은 순수 단위 검사로, 실제 예약·work·receipt 원자성은 기존 통합 검사로 나눈다.
+
+Phase 2의 3단계는 provider를 붙이지 않은 실제 실행·복구 Service를 합성 승인 설정으로 호출한다. `embedding-execution.integration`은 STARTED·attempt count·예약 노출의 원자성, retry 상한·DB clock·lease token·late 결과와 owner/current/consent/config/reservation fence를 검사한다. `embedding-recovery.integration`은 commit 후 enqueue 누락, retained completed/failed 메시지, Redis 큐 유실, bounded scanner의 중복 없는 선점과 복구를 실제 DB/Redis로 검사한다. 예산 admission에는 만료된 노출 예약의 상한 보존을 포함한다. fake caller는 commit 뒤 별도 연결에서 상태를 확인하며 실제 AI 품질·비용 정산·vector publication의 증거로 사용하지 않는다.
+
+consumer 종료 검사는 claim DB 처리와 Redis ack 대기를 구분한다. ack가 막혀도 새 claim을 멈추고 5초 유예 뒤 큐 연결을 종료하는지를 확인하되, 앱 전체의 DB drain·Pool 종료까지 5초로 보장한다고 주장하지 않는다. [3단계 기록](../plans/2026-09-22-phase2-recovery.md)은 당시 claim-only/provider-free 근거이며 현재 제품 전체의 완료 증거가 아니다.
+
+`tests/worker.integration.test.ts`는 Redis를 중지한 뒤 실제 worker 자식 프로세스를 시작해 최초 연결 실패를 관찰하고, SIGINT·SIGTERM 각각에서 종료되는지도 확인한다. 정상 연결 이후 ack 중단과 처음부터 연결하지 못한 상태는 서로 다른 회귀 경로다. 테스트 실패 시에도 자신이 시작한 프로세스를 회수한다.
+
+Phase 2 제품 연결은 추가로 다음을 검증한다. 결과 숫자와 실제 실행 여부는 [마무리 기록](../plans/2026-09-30-phase2-provider-gate.md#phase-2-마무리--2026-10-01-후속-승인)이 소유한다.
+
+- provider spy는 STARTED commit을 별도 연결에서 확인하고 호출 동안 idle-in-transaction 0건, body-only 입력, 429 자동 재호출 0건, 동일 본문 재사용 0-call을 확인한다. fake-provider 성공을 실제 검색 품질로 해석하지 않는다.
+- semantic HTTP는 실제 PostgreSQL에서 owner/current/deleted·consent·budget·중복 요청·수정/철회 경쟁·top-50·fallback 이유와 content-free ledger를 확인한다. query 전송 전 준비된 현재 자료가 없으면 0-call이어야 한다.
+- lifecycle은 과거 미선택 자료 0-work, 활성화 이후 저장의 누락 복구, rollback·SKIP LOCKED·bounded 상한, 삭제·철회 vector 제거와 90일 상세 정리 후 terminal work 보존을 확인한다.
+- 브라우저는 미선택 동의·명시적 활성화/검색·무료 안내·철회·fallback·키보드/focus·좁은 화면·스크린샷을 확인한다. 검색 API 응답 fixture를 사용하는 화면 검사는 실제 provider/DB 검색 검사를 대신하지 않는다.
+- 종료 gate는 전체 build/typecheck/lint/unit/integration/OpenAPI 일치와 브라우저·이미지 여정을 포함한다. 별도 실제 Gemini 합성 평가 결과를 과거 품질 근거로 재사용할 수 있지만 이번 실행으로 재측정했다고 쓰지 않는다.
+
 DB lifecycle 검사는 기동 장애·빈 DB/migration·준비된 runtime을 구분하고 각 case가 독립 컨테이너·필요한 migration·종료 정리를 소유한다. 앞선 case가 DB를 복구하거나 migration을 적용했다는 가정 없이 `-t`로 단독 실행할 수 있어야 한다. 컨테이너 초기화 시간이 늘어나는 대신 실행 순서 의존성을 없앤다.
 
 인증 복구 회귀는 이미 열린 보호 화면에서 refresh 401과 재전송 401이 중앙 종료로 이어지는지, 늦은 응답·후속 요청이 차단되는지, 재로그인 뒤 허용된 query/revision/앵커로 복귀하는지 확인한다. refresh 503·network 실패는 입력을 보존하고 명시적 재시도로 복구한다. OAuth 검사는 잘못된 binding이 정상 state를 소모하지 않는지와 callback query가 저장된 복귀 경로를 덮지 못하는지도 포함한다. 만료 정리는 유효 행·잠긴 행을 보존하고 한 호출에서 100건을 넘기지 않는지 실제 DB로 확인한다.
@@ -141,7 +159,7 @@ DB lifecycle 검사는 기동 장애·빈 DB/migration·준비된 runtime을 구
 
 평가 dataset은 개발용 20 cases와 release 전에 동결한 final 40 cases로 분리한다. final set은 답할 수 있는 grounded 32 cases와 근거가 부족한 8 ungrounded cases를 포함하고 개발 중 prompt/ranking 조정에 사용하지 않는다. 각 case는 owner, current/deleted state, keyword/한영 혼합 query, 필요한 evidence ID와 허용 answer claim 또는 `insufficient-evidence` 판정을 versioned fixture로 가진다. 실제 사용자 원문을 corpus에 복사하지 않는다.
 
-모든 비교는 corpus version, index snapshot/content hash, embedding·generation configuration ID, dimension, chunking, readiness, filter, 후보 수 `k`, query mode를 함께 기록한다. provider/model/version/dimension은 지금 선택하지 않으며 평가 결과가 승인 전 기본값을 암묵적으로 만들지 않는다.
+모든 비교는 corpus version, index snapshot/content hash, embedding·generation configuration ID, dimension, chunking, readiness, filter, 후보 수 `k`, query mode를 함께 기록한다. embedding은 ADR-0008의 승인된 Gemini 설정을 사용하고 답변 모델은 별도 승인 전 선택하지 않는다. 평가 결과만으로 미승인 기본값이나 제품 전체 품질 보장을 만들지 않는다.
 
 검색은 Hit@1, Hit@5, multi-evidence recall, owner/current/deleted filter 위반 0건을 보고한다. 답변은 grounded claim ratio, valid citation ratio, false-answer ratio와 ungrounded case의 올바른 refusal ratio를 보고한다. 한 aggregate 점수로 실패를 숨기지 않고 case별 결과와 numerator/denominator를 보존한다. threshold는 첫 구현 전 별도 release criterion으로 승인하며, threshold가 없는 동안 결과는 관찰값이지 합격 주장이나 운영 SLO가 아니다.
 
@@ -153,53 +171,13 @@ semantic 품질 평가는 실제 후보 configuration으로 실행한다. provid
 
 성능·품질 결과는 topology나 provider 선택이 아니며 [ADR-0010](0010-aws-terraform-decision-gate.md)의 배포 cost worksheet에 workload evidence로만 제공한다.
 
-#### Phase 1 keyword 측정 (2026-09-19)
-
-재현: `pnpm bench:search` (Docker 필요). 테스트 전용 PostgreSQL에만 기존 migration과 fixture를 적용하고 종료 시 해당 컨테이너를 제거한다. 구현된 Repository가 생성한 SQL을 캡처해 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`을 실행하므로 별도 단순화 쿼리를 대신 측정하지 않는다. raw 표본·plan·index·설정은 Git에서 제외하는 `test-results/keyword-search.json`에 저장한다.
-
-- 환경: Apple M2 Max/arm64, 호스트 12 CPU·32 GiB, Docker 28.0.4 VM 12 CPU·약 7.65 GiB. 컨테이너 별도 CPU/memory limit 없음. PostgreSQL 17.11/pgvector 0.8.6 고정 이미지, pool max 5, shared_buffers 128 MiB, work_mem 4 MiB, parallel workers per gather 2.
-- 자료 1k/10k/20k 각각 현재·과거 revision 한 개씩(20k 자료일 때 keyword 40k행), 조회 owner 80%, tombstone 5%. 약 300–950자 합성 본문, 희소어는 현재 자료의 0.5%, 흔한 단어는 50%. 실제 chunk·AI corpus가 아니라 Phase 1 keyword projection 부하 fixture다.
-- 시나리오마다 1회 예열 후 순차 10표본, `인증`은 동시 4요청×10회도 측정. cold cache·HTTP·snippet·사용자 네트워크는 제외한다. p95는 작은 표본의 관찰값이며 SLO·성능 보장으로 해석하지 않는다.
-
-20k 자료의 warm Repository 지연(ms):
-
-| 검색어/조건 | p50 | p95 | keyword 접근 계획 |
-|---|---:|---:|---|
-| bullmq | 10.15 | 10.73 | full-text + trigram BitmapOr |
-| 재시도 | 9.85 | 10.52 | BitmapOr |
-| 인증 | 234.71 | 246.82 | 병렬 Seq Scan |
-| 큐 | 236.22 | 248.37 | 병렬 Seq Scan |
-| bullmq 백오프 | 10.84 | 11.11 | BitmapOr |
-| 공통기록 (50% 일치) | 380.41 | 392.12 | BitmapOr, 많은 후보의 점수 계산 |
-| 공통기록 400페이지 | 389.94 | 401.53 | 같은 후보·정렬 + OFFSET |
-| 과거전용 (현재 결과 0개) | 236.06 | 254.31 | 병렬 Seq Scan, 현재 revision JOIN에서 제외 |
-| 인증, 동시 4요청 | 244.58 | 255.39 | 병렬 Seq Scan |
-
-1k→10k→20k에서 `인증` p50은 25.17→119.14→234.71ms, `bullmq`는 1.87→6.71→10.15ms였다. OR 자체가 index 사용을 막는다는 가설은 기각한다. 반면 선행·후행 wildcard를 붙인 짧은 토큰은 추출 가능한 trigram이 부족하며, 이 fixture에서 순차 스캔 비용이 확인됐다. 흔한 단어와 과거 revision도 별도 비용이므로 “짧은 한글만 고치면 검색이 빠르다”고 결론 내리지 않는다.
-
-이번에는 부분 문자열 정확도·정렬·schema를 변경하지 않았다. 후속 최적화는 동일 fixture와 실제 사용 규모를 기준으로 현재/owner 후보 축소·점수 계산 범위를 먼저 비교한다. 짧은 토큰의 FTS-only 전환은 검색 누락 정책이 바뀌므로 별도 승인 대상이다. `word_similarity_threshold` 변경은 현재 LIKE 조건의 해결책이 아니다. 2-gram projection이나 index 추가도 migration·쓰기 비용과 recall 비교가 선행돼야 한다. 반복 측정 없이 SQL만 바꾸거나 이 결과를 의미 검색 품질로 주장하지 않는다.
-
-#### 검색 저장 vector·snippet 후속 비교 (2026-09-20)
-
-같은 `pnpm bench:search` fixture·이미지·호스트에서 변경 전과 `0009` 적용 후 실제 Repository를 비교했다. 검색 결과·정렬·추가 한 행을 포함한 27조건은 저장 vector SQL과 기존 `to_tsvector` 표현식 SQL의 반환 행을 대조해 동일함을 확인했다. 비교 SQL은 실제 생성 쿼리의 vector 표현만 치환하고 표본 측정 밖에서 실행한다. 성능 baseline은 이전 표현식 index가 있는 변경 전 실행이며, 신규 실행에서는 저장 컬럼 index만 사용한다. 각 조건 10표본(동시성 조건 40표본), warm cache이며 다른 실행 시점의 비교라 정확한 개선율이나 운영 SLO로 일반화하지 않는다.
-
-20k 자료, 단일 요청·첫 페이지의 Repository 지연(ms):
-
-| 검색어 | 이전 p50 / p95 | 저장 vector p50 / p95 |
-|---|---:|---:|
-| bullmq | 11.81 / 12.92 | 6.83 / 7.77 |
-| 인증 | 238.02 / 249.76 | 23.54 / 25.44 |
-| 큐 | 238.57 / 258.61 | 23.58 / 24.58 |
-| 공통기록 | 376.77 / 383.31 | 290.47 / 306.62 |
-| 과거전용 | 233.13 / 260.46 | 22.43 / 34.35 |
-
-흔한 단어의 similarity 계산과 이력 스캔은 남아 있다. 점수 변경 없이 효과가 큰 저장 vector만 채택하고, owner/current 후보 축소·본문 후조회·current-search projection은 이번에 도입하지 않았다. 상위 N건만 재점수하거나 similarity를 제거하는 것은 순위 변경이므로 별도 결정이다. EXPLAIN의 total-startup 차이를 Sort 자체 시간으로 해석하지 않는다. index 접근 여부와 별개로 행별 함수 계산도 비용에 포함된다.
-
-snippet 재현은 `pnpm build:api` 후 `node tests/benchmarks/search-snippet.mjs`다. Node 24.20.0에서 1k/10k UTF-16 길이, 한글/ASCII/전각/소문자 길이 확장, 앞/중간/끝 24조건을 각각 100회 예열 후 50건×20표본으로 측정한다. raw 표본·CPU·실행 시각은 Git에서 제외한 `test-results/search-snippet.json`에 기록한다. DB·HTTP를 제외한 동기 함수 비용이다.
-
-10k 한글·50건의 p50은 앞 36.38→0.82ms, 중간 41.80→7.30ms, 끝 45.00→10.42ms였다. 전각 끝은 45.11→10.75ms, ASCII 끝은 31.40→3.22ms였다. 전체 grapheme 배열 대신 필요한 경계만 조회해 모든 측정 조건에서 p50이 감소했다. 소문자 길이 확장 문자 `İ`를 10k 가까이 반복한 끝 매칭은 145.11→110.85ms로 개선됐지만 여전히 비용이 크며 일반 본문과 구분해 기록한다. 임의 성능 상한 테스트나 fallback으로 정확도를 바꾸지 않는다.
+날짜별 baseline·저장 tsvector 및 snippet 비교는 [검색 측정 기록](../benchmarks/keyword-search.md)에 보존한다. 저장 vector의 채택 이유와 검색 의미는 ADR-0003이 소유하며, 과거 측정값을 현재 코드나 운영 성능으로 표현하지 않는다. 재측정 시 같은 fixture·설정과 반환 결과·순서를 대조한다.
 
 ### 관측성
+
+**API·worker 공통 안전 기준:** 각 앱의 `infrastructure/logging/logger.ts`에 Pino 인스턴스를 하나씩 두며 앱 소스를 서로 import하거나 DB 패키지에 로그 정책을 넣지 않는다. 두 앱 모두 `LOG_LEVEL`을 검증·적용하고 `req/res/err/password/accessToken/refreshToken` 필드를 제거한다. redact는 지정 필드의 보조 안전장치이지 임의 문자열·중첩 데이터의 비밀정보 제거를 보장하지 않는다. 원본 오류를 넘기지 않는 원칙을 유지한다. 설정 실패는 검증기가 만든 안전한 설정 키 목록만 안내하고 값·Zod 원본 오류는 출력하지 않는다. 전달 전 DB 조회 실패와 Redis/BullMQ 전달 실패는 서로 다른 고정 메시지로 남긴다.
+
+Nest가 `main`의 catch에 도달하기 전에 오류를 출력할 수 있으므로, 각 기존 logger 파일의 작은 `ConsoleLogger` 하위 클래스가 `error()`만 고정 Pino 메시지로 바꾼다. Nest의 정상 기동 log/warn은 유지하며 새로운 로그 registry·공유 패키지는 만들지 않는다. API·worker 실제 main의 합성 DI 실패 테스트에서 원본 message·stack·cause 미노출을 확인한다. 이 검사는 무한 대기 없는 worker 종료나 실패한 기동의 모든 자원 정리까지 보장하지 않는다.
 
 **Phase 0·1:** Nest 기본 기동 로그를 유지하고 애플리케이션 오류는 Pino logger를 직접 사용한다. `apps/api/src/infrastructure/logging/logger.ts`에서 한 번 설정한 인스턴스를 API 내부에서 직접 import하며 각 모듈·DB가 각자 logger나 래퍼를 만들지 않는다. DB idle-client 오류·알려진 실패·기동 실패는 원본 오류를 넘기지 않고 안전한 고정 메시지로 남긴다. 자체 `logEvent`, 허용 필드·`errorClass` registry, AsyncLocalStorage 요청 문맥, 요청 ID·응답 추적 header는 선행 구현하지 않는다. `main.ts`는 앱 생성·공통 설정·종료 hook·listen을 중심으로 유지하며, `configureApp`은 실제 서버·테스트·OpenAPI 생성이 함께 쓰는 작은 설정 함수로 둘 수 있다. 목표는 라이브러리를 제거하는 것이 아니라 기본 API를 활용하면서 직접 만든 주변 계층을 줄이는 것이다.
 

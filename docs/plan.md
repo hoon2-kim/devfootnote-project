@@ -1,10 +1,36 @@
 # devfootnote 구현·검증 계획
 
+## 현재 상태
+
+2026-10-13 추가 승인 작업은 **구현·관련 격리 검증 완료**다. 검색을 단일 입력·명시 hybrid 제출로 통합하고 AI 불가 시 실제 keyword fallback을 알리며, ⓘ 도움말과 짧은 첫 전송 안내를 적용했다. `includeExisting=true`로 기존·미래 자료의 자동 준비를 승인하되 기존 범위 제한 활성화는 보존한다. 질문은 단일 자료 상세 대화로 옮겨 동일 현재 revision의 최근 게시 답변 최대 3개를 서버 검증 후 문맥으로 사용하고, SSE는 처리 상태·검증된 최종 게시 답변만 전달한다. 임베딩은 대화의 선행 조건이 아니며 화면 대화 목록은 메모리에만 유지한다. 7일/90일 보존·미완료 질문 최대 10분, 목적별 동의·예산·owner/revision fence는 바꾸지 않는다.
+
+이번 변경의 검증: `pnpm build:backend`, 웹 build/typecheck, 테스트 타입 검사, ESLint·Prettier·dependency-cruiser(위반 0건)가 통과했다. `answers` 22개·`embedding-activation` 21개·`embedding-lifecycle` 17개·`semantic-search` 12개의 격리 통합 검사와 provider/policy 단위 31개, Playwright 63개가 통과했다. SSE 최초 owner 거부·연결 중 게시·재연결 무재호출, 기존 동의 범위 보존·20건 자동 준비, 모바일/데스크톱 대화·도움말·실패 복구를 확인했다. 전체 이미지 검사·실제 Gemini 재평가·개발 DB migration은 실행하지 않았다. 로컬 실행 전에 `0021_automatic_existing_materials.sql` 적용이 필요하다. 자료 밖 질문과 프롬프트 공격 차단의 실제 모델 정확도를 fake provider 회귀 결과로 주장하지 않는다.
+
+상태 기준: 2026-10-07. Phase 2의 10월 1일 완료 기록과 이후 리뷰 보완을 구분한다. [Phase 3~4 작업 기록](plans/2026-10-06-phase3-4-completion.md)의 코드·격리 검증과 실제 답변 3건 smoke를 완료했고 사용자 승인으로 제품 답변 설정도 연결했다. 로컬 DB 적용·수동 확인은 사용자가 진행한다. Phase 5의 동결 품질 평가나 Phase 6 배포 완료를 뜻하지 않는다.
+
+| 범위 | 상태 | 근거·다음 경계 |
+|---|---|---|
+| Phase 1 인증·자료 CRUD·keyword 검색 | 완료 기록 있음 | [당시 검증 결과](plans/2026-09-21-phase1-completion.md); 이후 변경은 해당 회귀 결과로 판단 |
+| Phase 2의 0~1단계 공유 DB·큐·claim | 구현·검증 기록 있음 | [기반 기록](plans/2026-09-21-phase2-foundation.md); claim은 임베딩 완료가 아님 |
+| Phase 2의 2단계 동의·예산·활성화 | API·DB 구현·검증 기록 있음 | [당시 활성화 기록](plans/2026-09-22-phase2-activation.md); 후속 무료 정책·화면과 연결 |
+| Phase 2의 3단계 attempt·retry·lease 복구 | provider-free 범위 구현·검증 완료 | [당시 실행·복구 결과](plans/2026-09-22-phase2-recovery.md#실행-결과); 후속 consumer가 provider 실행을 조합 |
+| 실제 provider·vector 게시·의미 검색·화면·정리 | Gemini Free 승인 범위 구현·종료 검증 완료 | 개발 DB 적용·사용자 환경의 수동 확인은 별도; [완료 기록](plans/2026-09-30-phase2-provider-gate.md#phase-2-마무리--2026-10-01-후속-승인) |
+| Phase 3~4 답변·화면 완결 | 코드·격리 검증·실제 3건 smoke 및 설정 활성화 완료 | 기존 종료 검사와 실제 합성 smoke 3/3; 후속 활성화의 설정/답변 29개 회귀 통과. 개발 DB 적용·수동 확인은 별도 |
+| Phase 5~6 최종 평가·배포 | 후속 범위 | 각 phase의 gate와 별도 승인 필요 |
+
+OpenAI 첫 실제 평가 요청은 HTTP 429로 중단했고 이후 실행 코드를 제거했다. Gemini 합성 평가의 3회 호출은 vector/hybrid Hit@5 20/20, 제외 조건 위반 0건으로 개발 품질 gate를 통과했다. 이후 잠시 선택했던 유료 등급 전제는 사용자의 **Gemini Free로 Phase 2 완료** 요청으로 대체했다. 공개 학습 자료에만 명시적으로 동의·활성화하며 민감·기밀·개인정보는 보내지 않는다. 4~6단계의 worker 호출·동일 입력 재사용, query 검색·기존 화면, bounded 정리와 종료 검증을 완료했다. 단위·통합 318개, 브라우저 49개, 최종 이미지 1개 및 타입·빌드·lint·OpenAPI 검사가 통과했다. 이전 실제 품질 평가와 이번 격리 DB·Redis·fake provider 회귀 검사는 서로 다른 근거다. 이번 제품 연결 작업에서 실제 AI 호출을 추가하거나 개발 DB migration을 적용하지 않았다.
+
+2026-10-07 사용자 요청의 [제품 화면 통일](adr/0006-frontend-information-architecture-and-design.md#제품-화면-통일--2026-10-07)은 로그인 배치를 유지하고 자료함·검색·읽기·작성·AI 보조 패널에 적용했다. `pnpm exec playwright test` 58개, web build/typecheck, 변경 범위 ESLint·Prettier, 테스트 TypeScript와 dependency-cruiser(위반 0건)가 통과했다. 320·768·1280px 화면과 키보드·접근성·오류 복구를 기존 브라우저 여정으로 확인했으며 질문 접기/펼치기의 초안 보존·AI 호출 없음도 추가 검증했다. 이번 UI 변경에서 전체 백엔드 통합·이미지 검사는 재실행하지 않았고 실제 AI 호출·개발 DB 변경은 하지 않았다.
+
+2026-10-11 후속 UI 간소화는 반복 설명·참고 예산 표시·동의 checkbox/별도 승인 버튼을 제거하고 첫 전송 액션으로 통합했다. 서버의 동의·예산·멱등성은 유지했다. 공통 버튼·화살표/번호 페이지 이동과 검색 radio 선택을 적용했고 [화면 결정](adr/0006-frontend-information-architecture-and-design.md#작업-화면-간소화--2026-10-11)·ADR-0008·spec을 맞췄다. `pnpm exec playwright test` 59개, web build/typecheck, 변경 범위 ESLint·Prettier, 테스트 TypeScript와 dependency-cruiser(272개 모듈, 위반 0건)가 통과했다. 첫 답변 승인 실패에서 생성 0건·같은 승인 재시도, 전송 전 명시 동작, 끄기, 페이지 번호·URL·실제 결과, 검색 방식의 마우스/키보드를 확인했다. 전체 백엔드 통합·이미지 검사와 실제 AI 호출은 실행하지 않았다. API의 total count 계약은 변경하지 않았다.
+
 ## 1. 목적과 실행 경계
+
+2026-10-13 사용자 요청 후속 검증: 삭제 버튼에 공통 destructive 색상, 검색에 숨길 수 있는 오른쪽 질문 drawer, 자료 목록에 `pageSize`·`totalCount`와 정확한 번호 이동을 연결했다. OpenAPI/SDK를 재생성했으며 자료 통합 검사 13개, 전체 브라우저 검사 59개, backend/SDK/web build, web typecheck·테스트 tsc, 변경 범위 ESLint·Prettier, dependency-cruiser(272개 모듈·위반 0건)가 통과했다. 320/1280px 질문 화면과 삭제 버튼 스크린샷을 확인했다. 생성 중 접기/다시 열기에서 추가 호출이 없고, 중첩 철회 창의 Escape가 질문 drawer까지 닫지 않는 것을 회귀 검사했다. 전체 backend 통합·이미지 검사·실제 AI 호출은 실행하지 않았고 개발 DB·환경 파일은 변경하지 않았다. migration은 필요하지 않다.
 
 [`spec.md`](spec.md)가 제품 요구사항(`F-*`), 수용 기준(`AC-*`)과 non-goal(`NG-*`)의 유일한 선언 소유자다. 이 문서는 의존 순서와 검증 시나리오(`V-*`)만 선언한다. 기술 결정은 [ADR 기준선](#2-adr-기준선)이 소유한다.
 
-현재 Phase 1 인증·자료 CRUD·keyword 검색까지 구현했으며 단계별 검증 결과는 아래 완료 기록을 따른다. 파일·script의 존재는 해당 gate 통과를 뜻하지 않는다. 문서 전환 당시의 제품·Git 작업 금지(`ref:NG-06`, `ref:NG-07`)는 문서 승인만으로 제품 작업을 시작하지 않는 경계다. 문서 수정·리뷰 요청에서 진행 중인 제품 코드, dependency, DB나 인프라를 임의로 변경하지 않는다. Git 작업도 별도 명시적 승인 없이 수행하지 않고, AI 호출과 Phase 6 배포는 각자의 gate·승인을 유지한다.
+Phase 1 인증·자료 CRUD·keyword 검색을 유지하며 Phase 2의 승인된 비동기 처리·의미 검색 범위를 완료했다. 검증 결과는 아래 완료 기록을 따르고 파일·script의 존재는 해당 gate 통과를 뜻하지 않는다. 문서 전환 당시의 제품·Git 작업 금지(`ref:NG-06`, `ref:NG-07`)는 문서 승인만으로 제품 작업을 시작하지 않는 경계다. 문서 수정·리뷰 요청에서 진행 중인 제품 코드, dependency, DB나 인프라를 임의로 변경하지 않는다. Git 작업도 별도 명시적 승인 없이 수행하지 않고, AI 호출과 Phase 6 배포는 각자의 gate·승인을 유지한다.
 
 역사적 인증 교체는 spec의 단일 trace인 `integration:github-oauth` → `integration:google-oauth`만 참조한다. 그 밖의 이전 제품 의미, ADR 또는 부록은 이 계획의 입력이나 구현 단계가 아니다.
 
@@ -31,133 +57,60 @@ ADR-0001 defines the package DAG; ADR-0002 owns entity/transition boundaries and
 
 ### Phase 0 — 별도 제품 승인과 최소 scaffold
 
-시작 조건은 제품 scaffold에 대한 명시적 별도 승인이다. 승인 뒤 Node.js LTS와 호환 가능한 stable package exact version을 고정하고, 첫 slice에 필요한 `apps/web`, `apps/api`, `packages/api-client`만 만든다. `pg`, `drizzle-orm`의 node-postgres adapter와 `drizzle-kit`도 호환 가능한 exact version으로 고정한다. ADR-0007의 공통 성공·오류 JSON/OpenAPI 계약, test discovery와 PostgreSQL migration baseline을 준비한다. 검증 증거는 기존 테스트·CI 결과와 짧은 실행 보고로 시작하며 별도 manifest 형식을 선행 구축하지 않는다. 첫 실제 endpoint와 함께 작은 ResponseInterceptor·GlobalExceptionFilter 및 응답 schema를 검증하며 빈 공통 framework부터 만들지 않는다. Migration은 ADR-0003의 schema → SQL generate → 생성 SQL 검토 → 명시적 migrate 흐름으로 준비하고, `push`와 API/worker startup 자동 migration은 사용하지 않는다. 이 흐름의 파일 생성·실행도 현재 문서 승인이 아닌 별도 scaffold/구현 승인 뒤에만 수행한다. `apps/worker`, Redis/BullMQ와 AI dependency는 사용하는 phase보다 먼저 만들지 않는다.
+초기에는 web/API/생성 client와 PostgreSQL 기반만 구성한다. 현재 완료된 단계의 도입 순서를 보존한 설명이며 worker·Redis를 제거하거나 scaffold를 다시 만들라는 지침이 아니다.
 
-pnpm workspace와 함께 **Turborepo를 Phase 0부터** 도입한다. 실제 존재하는 package script만 root task에 연결하고 build 의존 순서·산출물·입력 환경을 명시한다. dev task는 persistent·cache off로 두고 migration, 외부 AI 호출, 실제 DB·큐 통합 검증 같은 상태 의존 작업을 cache hit로 건너뛰지 않는다. 원격 cache와 공용 config package는 초기 범위에 넣지 않는다.
-
-로컬 실행은 ADR-0001에 따라 루트 `docker-compose.yml`에 PostgreSQL+pgvector만 구성하고 web/API는 호스트에서 pnpm·Turbo 개발 script로 실행한다. Docker 실행 환경, 고정 이미지 버전, loopback 연결과 healthcheck, 개발 데이터 named volume을 준비하고 검토된 migration을 명시적으로 적용한다. 실제 시작·중지·검증 명령은 생성한 파일과 package script를 확인한 뒤 기록한다. 테스트는 개발 DB와 분리된 Testcontainers 및 같은 migration을 사용한다. 이 설정 생성·Docker 실행도 현재 문서 승인이 아닌 제품 scaffold 승인 후 작업이다.
-
-폴더는 ADR-0001의 목표 구조 중 현재 기능만 만든다. API의 `modules` 안에서 기능별 Controller·DTO·Service·Repository를 연결하고 작은 common·infrastructure를 둔다. auth/search/health는 레이어드, materials는 라이트 헥사고날을 따른다. 공개 Service 메서드를 업무 port로 사용할 수 있으며 모든 기능에 interface·UseCase 계층을 추가하거나 기능이 없는 폴더를 미리 채우지 않는다.
-
-DB 연결은 backend 내부 `DatabaseModule`의 singleton `pg.Pool`·Drizzle 주입 provider와 종료 hook으로 구성한다. 요청별 pool이나 CRUD wrapper는 만들지 않는다. ADR-0003의 유한 연결/쿼리/잠금 timeout, idle-client error 정제와 app close 뒤 연결 반환을 실제 PostgreSQL로 확인한다. schema와 Kit config는 Nest 기동·DB 연결 없이 로드할 수 있어야 하며 build에 schema 생성·migration 적용을 숨기지 않는다.
-
-health는 [ADR-0009의 최소 HTTP/DB 확인 범위](adr/0009-verification-observability-and-search-evaluation.md#health와-slo-gate)로 구현한다. `/health/live`는 DB와 무관한 200, `/health/ready`는 기존 연결의 `SELECT 1` 성공 200·DB 실패 503이며 둘 다 ADR-0007의 일반 성공·오류 JSON을 따른다. `live`는 단순 응답을 반환하고 `ready`에서만 Terminus 기본 API와 backend의 기존 DB 확인 메서드를 연결한다. Swagger는 상태 코드·설명만 명시하며 health 본문 타입을 위해 별도 DTO·inline 모델을 늘리지 않는다. probe 전용 예외 필터·RawResponse·별도 종료 JSON, 임시 `/api/v1/health/status`와 로그인 화면의 API ping은 제거한다. `ref:V-01`의 공통 응답·SDK 계약과 `ref:V-09`의 실제 DB 장애·복구·Pool 종료 검증은 유지한다.
-
-기동은 Nest 기본 로그와 작은 공통 설정·종료 hook·listen으로 구성한다. `configureApp`은 실제 서버·HTTP 테스트·OpenAPI 생성이 공유할 수 있다. 애플리케이션 오류는 backend에서 한 번 설정한 Pino logger를 직접 사용하고 안전한 고정 메시지로 비밀정보를 차단한다. 단순화는 라이브러리 제거가 아니라 직접 만든 주변 계층을 줄이는 것이다. 자체 `logEvent` 래퍼·허용 필드 registry·AsyncLocalStorage 요청 문맥·trace header는 선행 구현하지 않으며 OpenTelemetry·추적은 실제 비동기 처리·관측 요구가 생기는 Phase 2 이후에 필요한 범위만 도입한다.
+- pnpm·Turbo의 실제 task, 생성 타입·cache 입력, 호스트 개발·앱 이미지 경계는 ADR-0001을 따른다.
+- 기능별 모듈·공개 경계는 ADR-0002, DB 연결 수명주기·명시적 migration은 ADR-0003을 따른다. DB 연결·migration을 build의 숨은 선행 작업으로 넣지 않는다.
+- 최소 HTTP envelope·OpenAPI/SDK는 ADR-0007, PostgreSQL 기반 ready와 DB 없는 live·안전한 로그·격리 테스트는 ADR-0009를 따른다.
+- 해당 단계에 필요한 검사만 연결하며 다음 phase의 빈 worker·AI 코드·실패 테스트를 선행 생성하지 않는다. 초기 구현과 이후 구조 변경의 당시 기록은 Phase 1 이력과 모듈 개편 기록에서 구분한다.
 
 Gate: `ref:AC-09`, `ref:AC-11`의 현재 구현 subset DAG/API 경계를 `ref:V-09`로 증명한다. 다음 phase의 acceptance를 미리 작성·실패시키는 것은 Phase 0 완료 조건이 아니다. 최종 허용 graph에 아직 없는 worker·feature를 빈 placeholder로 만들지 않는다. 로컬 전용 `docs/evidence/phase0/`의 2026-09-15 보존 기록은 단순화 이전의 probe·로그·API 연결 화면 계약을 검증한 기록으로 현재 gate의 통과 근거가 아니며, 새 실행 결과로 판단한다. 과거의 다음 phase red-test 기록도 당시 증거로 보존하되 현재 필수 검사나 기능 구현 증거로 사용하지 않는다.
 
 ### Phase 1 — 로그인부터 저장·keyword 검색·읽기까지
 
-첫 slice인 **환경 설정 + 인증**은 앱별 `.env.dev`·`.env.prod` 로딩, Nest Config·Zod 설정 검증, Google OAuth·서비스 JWT·인증 migration, 로그인 UI·인증 복구와 최소 `/library` 진입을 구현했다. `passport-google-oauth20`과 backend `auth`를 사용하며 실제 API·격리 PostgreSQL·Google 외부 응답 fixture 기반 브라우저 검증까지 완료했다. 실제 Google 계정의 로그인·새로고침 유지·로그아웃·보호 화면 접근은 사용자가 로컬에서 확인했다. 실제 비밀값 파일은 사용자가 관리한다. 이후 자료 CRUD·검색·읽기와 격리된 production 이미지의 HTTPS 검증을 추가했다. 실제 배포 도메인·공인 인증서 확인은 Phase 6 범위다. 책임 분리는 ADR-0001/0002, 응답 조립은 ADR-0007을 따른다.
+Google 로그인부터 자료 생성·수정·삭제, keyword 검색과 현재 원문 읽기까지 AI 없이 사용하는 첫 완결 여정이다. 구현·검증의 날짜별 결과와 미실행 범위는 [Phase 1 완료 기록](plans/2026-09-21-phase1-completion.md), 당시 구조 변경은 [모듈 개편 기록](plans/2026-09-18-api-module-reorganization.md)에 보존한다.
 
-후속 승인 범위인 **로그인 화면·공통 디자인 정리**도 구현했다. `DESIGN.md`와 ADR-0006 기준으로 로그인, 헤더·자료함 진입 안내, 인증 대기·오류·로그아웃 화면을 정리하고 shadcn/Radix Button과 Lucide를 필요한 곳에만 사용했다. 당시 모바일·태블릿·데스크톱, focus·skip link·동작 줄이기·axe를 포함한 브라우저 16개를 통과했다. 이후 목록·등록 폼·검색을 실제 API와 연결했다.
-
-2026-09-17 후속 승인 범위인 **자료 등록·목록·현재 원문 읽기**를 구현했다. backend `materials` Service는 입력 준비·멱등 경쟁의 업무 흐름을, Repository는 동일 tx의 revision/chunk/keyword/receipt/intent 저장과 owner/current/deleted 조회를, API Controller·DTO는 HTTP와 공개 응답을 소유한다. `/library`의 실제 등록 폼·목록과 `/documents/[materialId]`의 메모/원문 읽기를 생성 SDK로 연결했다. 당시 관련 Vitest 91개와 브라우저 21개를 통과했으며, 개발 DB 적용은 사용자 작업으로 남겼다. `0004` 생성 DDL과 `0005` 관계 제약은 격리 DB의 빈 DB 적용·이전 인증 schema upgrade로 검증했다. 이후 수정·삭제·키워드 검색 API와 화면, 앱 이미지를 구현했다.
-
-인증·저장 등 각 기능을 실제로 시작할 때 해당 acceptance에 필요한 검사를 선택하고 기존 fixture부터 재사용한다. 버그 수정은 좁은 재현 테스트를 우선하되 모든 변경에 의도적인 실패 테스트·전용 script를 요구하지 않는다. 미구현 기능의 404를 미리 401과 비교하는 검사를 Phase 0에 남겨 두지 않으며, 인증의 실패·성공·권한·재발급 검증 범위는 `ref:AC-02`와 ADR-0005/0009를 유지한다.
-
-GoogleStrategy는 서버 code 교환·profile 조회 뒤 `{ googleId }`만 반환하고 Controller가 AuthService의 계정 재사용·첫 로그인 생성 업무를 호출해 JWT cookie를 설정한다. 검증된 Google 사용자 누구나 자신의 계정을 사용하며 새 `0003_allow_multiple_accounts.sql`은 기존 account·refresh를 보존하고 단일 계정 제약만 제거한다. OAuth state는 5분 DB binding·원자 소모로 보호한다. 서비스 JWT의 15분 access·고정 7일 refresh·계정별 CAS·logout은 유지하고 CSRF는 `csrf-csrf`·cookie-parser·별도 `CSRF_SECRET`으로 연결한다. 프론트는 생성 SDK의 CSRF bootstrap·한 번의 read 요청 refresh 복구·로그아웃과 인증 경계를 연결했다. 자료 등록 요청도 서버 멱등성을 갖춘 뒤 같은 body/key의 1회 복구를 추가했다. 연결 장애는 강제 로그아웃하지 않고 명시적인 재시도를 제공한다. 서버 session·인증 Redis·추가 계층은 만들지 않는다.
-
-`auth`와 `materials`의 최소 public ports, 실제 PostgreSQL save transaction, owner/current/deleted predicate, keyword query와 safe Markdown reader를 end-to-end로 완성한다. 일반 조회·저장은 Drizzle을 사용하고 검색·잠금 등 필요한 구간만 parameterized `sql` 템플릿으로 보완한다. 원자 save의 모든 ORM·SQL 연산은 같은 Drizzle transaction handle을 사용하며 callback 안에서 전역 DB handle로 빠져나가지 않는다. 같은 자료의 재전송, concurrent/stale update와 삭제를 이 slice에서 닫는다. Redis와 외부 AI provider는 이 phase의 runtime dependency가 아니다. Google 로그인 검증은 외부 token/profile 요청만 fixture로 제어하고 실제 Passport Strategy/Guard·앱 설정·DB 효과를 확인한다. 별도 인증 provider 서버나 규격 전수 검증 플랫폼은 만들지 않는다.
-
-조건부 갱신의 0건 결과와 원자 작업 중 실패가 부분 commit·성공 응답으로 이어지지 않는지 검증한다. 필요한 DB 오류만 code/알려진 constraint로 분류하고 Drizzle의 SQL·parameter·nested cause가 API나 telemetry에 노출되지 않게 한다. 빈 DB 적용과 이전 schema에서의 upgrade는 같은 검토된 SQL/metadata로 검증하며, migration 실행은 대상 DB를 확인한 단일 실행 주체로 제한한다.
-
-실제 제품 API와 생성 SDK를 연결한 사용자 여정을 검증한다. 일반 성공·오류 envelope contract test는 계속 유지하고, 인증 전 화면에서 보호된 API의 정상 401을 서버 장애로 오인하지 않는다. 별도의 API ping UI는 만들지 않으며 `live`·`ready`는 최소 운영 확인용으로 유지한다.
-
-web/API의 앱별 Dockerfile과 루트 `.dockerignore`를 도입하고 `docker-compose.yml`의 선택 `app` profile로 빌드된 runtime image의 기동·핵심 HTTP smoke를 검증한다. build context는 공유 package와 lockfile을 포함하는 모노레포 루트이며 multi-stage·non-root·secret 제외 기준을 지킨다. 호스트 개발과 컨테이너 모드 모두 브라우저 기준 same-origin `/api/v1`·HTTPS cookie/CSRF 경계를 유지하고 컨테이너 DNS 주소를 브라우저 URL로 쓰지 않는다. 프록시 구현은 이 경계를 만족하는 최소 구성으로 해당 slice에서 검증하며 별도 인프라 제품을 지금 고정하지 않는다. CI도 같은 이미지 빌드·최소 runtime smoke를 수행하되 격리된 임시 자원과 Google 외부 요청 fixture를 사용하고 registry push나 cloud credential을 요구하지 않는다.
+- 인증·세션·CSRF·owner 격리와 일시 장애/terminal 인증 복구는 ADR-0005/0007을 따른다.
+- 저장 원자성·멱등성·변경 없는 저장·revision CAS·현재 자료 검색은 ADR-0003을 따른다. 실제 DB에서 부분 저장과 stale 결과 노출을 배제한다.
+- 생성 SDK와 세 제품 화면, 안전한 원문 읽기·접근성은 ADR-0006/0007을 따른다.
+- 실제 Passport와 Google 외부 응답 fixture, 격리 PostgreSQL·브라우저·HTTPS 앱 이미지로 검증한다. 사용자 개발 DB·비밀값·volume을 재사용하지 않는다.
+- 이 단계의 로컬 이미지 검증은 실제 배포 도메인·공인 인증서·클라우드 운영 완료를 뜻하지 않는다.
 
 Gate: `ref:AC-01`–`ref:AC-04`, `ref:AC-08`의 core path가 `ref:V-01`–`ref:V-05`로 통과하고, `ref:V-09`의 현재 구조·이미지 실행 검증을 통과해야 한다.
 
-2026-09-18 **API 모듈·테스트 구조 개편**: API 전용 backend 패키지를 modules로 통합하고 materials 저장 포트·공개 index·dependency-cruiser·공통 응답 선언을 적용한다. migration은 전체를 `apps/api/drizzle`로 이동하며 SQL/metadata를 변경하지 않는다. 중복 helper/scaffold 테스트를 줄이고 실제 DB/HTTP·브라우저 회귀와 순수 본문 규칙을 유지한다. env 모드는 실행 명령이 소유하며 실제 비밀 파일은 사용자가 관리한다. 범위·결과는 [개편 기록](plans/2026-09-18-api-module-reorganization.md), 검증 정책은 ADR-0009를 따른다.
-
-2026-09-18 **Phase 1 로컬 gate 완료**:
-
-- `ref:V-01`–`ref:V-05`: 단위·HTTP 42개, 실제 PostgreSQL 통합 63개, 브라우저 27개 통과. 등록·목록·검색·읽기·수정·삭제, 두 탭의 revision 충돌과 최신 내용 복구, 응답 유실 재시도의 중복 방지, 계정 전환 뒤 자료·검색 격리, 페이지네이션을 검증했다. 검색·삭제 확인창의 320/1280px axe·스크린샷과 Escape 취소·포커스 복귀를 추가했다. 기존 인증·등록·읽기의 320/768/1280px 검사는 유지했다.
-- `ref:V-09`: 실제 Compose app profile의 API·web·migration 이미지와 테스트 전용 PostgreSQL을 사용한 HTTPS 여정 1개 통과. production 설정의 Secure/HttpOnly/host-only cookie, CSRF 누락·다른 Origin 거부, refresh, Redis/AI 없는 저장·검색, 전체 앱/DB 재시작 후 보존, DB 장애 시 live 200/ready 503과 복구를 확인했다. web healthcheck를 추가해 `--wait`가 웹 응답 준비도 기다리게 했다.
-- 검증 명령: `pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:integration`, `pnpm openapi:check`, `pnpm test:browser`, `pnpm test:images`. CI에도 동일한 이미지 여정을 연결했다. 로컬 통과와 원격 GitHub Actions 실행은 구분한다.
-- 코드 가독성 요청에 따라 Prettier·EditorConfig 및 ESLint 중괄호/빈 줄 규칙을 추가하고 소스·테스트 형식을 통일했다. 생성 SDK·OpenAPI·migration 이력과 문서는 일괄 포맷에서 제외한다. `pnpm format`으로 수정하고 `pnpm lint`에서 형식을 강제한다.
-- 실제 사용자 env·개발 DB·migration 이력은 변경하지 않았다. Google 응답과 인증서는 격리 fixture이며 실제 Google 계정의 로컬 로그인은 앞선 사용자 확인을 근거로 한다. 공인 인증서·운영 도메인·클라우드 배포는 Phase 6, worker·AI 호출은 Phase 2 이후의 별도 승인 범위다. 이번 작업에서 commit/push는 하지 않았다.
-
-#### Phase 1 리뷰 후속 수정 — 2026-09-19
-
-- snippet의 전각/NFKC 일치 위치, 여러 필드에 분산된 토큰, surrogate 경계 오류를 기존 로직에서 3개 실패로 재현한 뒤 수정했다. 정규화 길이 변화·시작 경계·plain text·미리보기까지 좁은 단위 9개로 검증하고 실제 검색 HTTP 회귀를 추가했다.
-- materials Service의 원문 준비·fingerprint는 유지하고, 기존 멱등 경쟁 처리는 Repository 안으로 옮겼다. 2026-09-17 기록의 Service 책임에서 이 부분만 변경했다. 저장 포트는 작업별 입력 객체와 `PageResult<T>`를 사용하며 `ReceiptRace`·추가 한 행 규약을 소비자에게 노출하지 않는다. SQL transaction·CAS·HTTP JSON·OFFSET·migration은 그대로다.
-- `pnpm bench:search`로 1k/10k/20k 합성 자료의 실제 Repository SQL 27조건·총 360표본을 측정했다. 짧은 한글뿐 아니라 흔한 단어·과거 revision 비용을 확인했다. [ADR-0009의 측정 요약](adr/0009-verification-observability-and-search-evaluation.md#phase-1-keyword-측정-2026-09-19)을 기준으로 후속 최적화를 판단하며 이번에 검색 의미나 index를 바꾸지 않았다.
-- API·web Dockerfile에서 manifest/lockfile 설치 레이어를 소스 빌드와 분리했다. 첫 빌드 성공 뒤 소스 변경 재빌드에서 양쪽 install `CACHED`를 확인했다. API·web 사이의 공통 빌드 레이어도 재사용되므로 web의 `COPY . .`까지 `CACHED`일 수 있다.
-- 재검증: 단위·HTTP 51개, 실제 PostgreSQL 통합 65개, 브라우저 27개, production 이미지 HTTPS 여정 1개 통과. workspace 타입 검사, ESLint·Prettier·dependency-cruiser, OpenAPI/SDK drift 검사 통과. sandbox의 HTTP listen 제한은 권한 승인 후 재실행해 통과했다. 이미지 검사는 기존 fixture Google을 사용했으며 실제 Google 재로그인·원격 CI·배포는 실행하지 않았다.
-- 개발 DB·사용자 env·migration 이력·KST 로그·아키텍처 선택은 유지했다. commit/push는 하지 않았다. AGENTS에는 새 수동 측정 명령만 추가했으며 새 Codex/Claude 세션의 지침 로딩은 별도 확인하지 않았다.
-
-#### Phase 1 인증·검증 후속 보완 — 2026-09-20
-
-- `ref:V-01`: 제품 요청의 refresh 401/재전송 401을 typed terminal auth로 전달하고 한 번의 private 요청 중단·cache 정리·로그인 복귀로 연결했다. 503·network 실패는 편집 입력을 유지한다. 허용된 returnTo는 OAuth state에 저장해 검색 query·문서 revision/앵커를 복원하며 임의 URL과 callback query의 덮어쓰기를 거부한다.
-- state+binding+DB TTL을 단일 DELETE로 검사·소모한다. pre-auth/refresh 생성의 만료 정리는 expiry index와 `SKIP LOCKED`를 사용해 한 호출당 최대 100건으로 제한한다. 정리와 생성은 같은 transaction에서 실패·rollback한다. 새 `0007_auth_expiry_and_return_to.sql`은 격리 DB에서만 적용했으며 개발 DB에는 사용자의 명시적 `pnpm db:migrate`가 필요하다.
-- SDK 결과·공개 오류 정규화와 feature별 query key를 좁게 공용화했다. 검색 SQL·OFFSET·materials 아키텍처·원자 저장 구조는 변경하지 않았다. 검색 projection 최적화, route group·삭제 UI 분리는 이번 범위에서 보류했다.
-- Next typegen을 typecheck에 연결하고 next-env 생성물을 Git/Docker 입력에서 제외했다. root typecheck는 compiled API도 준비한다. API/Next 생성물이 없는 임시 소스 사본에서 설치된 의존성만 재사용해 `pnpm typecheck` 단독 통과를 확인했다. 새 clone의 의존성 재설치까지 검증했다는 뜻은 아니다. Turbo의 루트 입력과 CI SHA·읽기 권한·중복 job/실행 취소 정책도 갱신했다.
-- 인증 경쟁은 실제 DB lock barrier, 자료 CAS는 승자 effect·패자 잔여 행·read/search까지 검증한다. DB lifecycle case를 독립 fixture로 바꾸고 migration lock case의 `-t` 단독 실행도 통과했다. terminal auth 두 경우와 잘못된 binding의 state 소모는 수정 전 실패를 확인했다.
-- 재검증: 단위·HTTP 57개, PostgreSQL 통합 79개, 브라우저 전체 33개, production HTTPS 이미지 여정 1개 통과. build·typecheck·ESLint·Prettier·dependency-cruiser·OpenAPI/SDK drift 검사를 통과했다. 브라우저 전후 web tsconfig 해시는 같고 next-env는 추적되지 않는 로컬 파일로 남았다. 문서의 로컬 링크 대상 71개와 `git diff --check`도 확인했다. 브라우저의 503/network 새 case는 처음 실행에서 빈 Next alert를 잘못 기다린 검사 실패가 있었고, 실제 편집 오류 문구를 기다리도록 수정한 뒤 전체 재실행으로 확인했다.
-- 실제 Google 재로그인·원격 CI·개발 DB migration·배포는 실행하지 않았다. 사용자 env와 기존 작업을 보존했으며 commit/push는 하지 않았다. next-env는 승인받아 Git 추적만 제거하고 로컬 파일은 유지했다. AGENTS의 생성 타입 지침은 갱신했으나 새 Codex/Claude 세션의 자동 로딩은 확인하지 않았다.
-
-#### Phase 1 OAuth 임시 상태 명칭 정리 — 2026-09-20
-
-- PostgreSQL 기반 state·refresh, Passport와 JWT 인증 동작은 유지하고 `LoginAttempt`/`loginAttempts`를 `OAuthState`/`oauthStates`로 통일했다. 저장·소모 메서드는 `saveOAuthState`·`consumeOAuthState`로 명명하고 테스트·문서의 현재 테이블 참조도 맞췄다. 로그인 이력·실패 횟수·계정 잠금이나 인증용 Redis는 추가하지 않았다.
-- `0008_rename_oauth_state.sql`은 테이블·PK·만료 index를 rename만 한다. Kit의 index drop/create 출력은 검토 후 `ALTER INDEX ... RENAME`으로 바꿔 기존 index를 재사용한다. 이전 SQL/snapshot 16개의 해시가 동일하고 재생성 시 추가 schema diff가 없음을 확인했다.
-- 실제 PostgreSQL에서 0007까지 적용한 DB에 임시 상태를 저장한 뒤 0008을 적용해 모든 column 값과 PK·만료 index 보존을 검증했다. 단위·HTTP 57개, 새 검사 1개를 포함한 통합 80개, 브라우저 33개, production HTTPS 이미지 여정 1개와 API build·workspace typecheck·lint·OpenAPI/SDK drift 검사를 통과했다. 문서 로컬 링크 대상 91개에 누락이 없고 `git diff --check`도 통과했다. 실제 Google 재로그인·원격 CI는 실행하지 않았다.
-- 개발 DB에는 적용하지 않았다. 구버전 API 중지 → `pnpm db:migrate` → 갱신한 API 시작 순서가 필요하며, 새 인증·화면 정책이나 배포 승인을 뜻하지 않는다. 기존 작업과 staged 상태를 보존하고 commit/push는 하지 않았다. AGENTS에는 OAuth 임시 상태와 로그인 이력의 구분만 추가했으며 새 세션의 지침 자동 로딩은 확인하지 않았다.
-
-#### Phase 1 로그인 디자인 전환 — 2026-09-20
-
-- 사용자 요청에 따라 로그인부터 고운바탕과 종이색·올리브 계열의 편집물 배치로 변경했다. UIBowl의 공개 로그인 패턴만 확인했으며 유료 콘텐츠는 열람하지 않았다. 적용 범위·기존 DESIGN 계약의 예외·출처는 ADR-0006에 기록했다. 폰트는 라이선스와 checksum을 보존한 로컬 WOFF2로 제공하고 의존성은 추가하지 않았다.
-- `ref:V-10`: 320/768/1280px의 실제 스크린샷을 확인하고 가로 overflow·44px 이상 버튼·키보드 focus·axe 검사 및 320px 오류 화면을 검증했다. 로그인·로그아웃·만료 복구·returnTo를 포함한 관련 Playwright 19개, web production build·web typecheck와 변경한 TS/TSX/CSS의 ESLint·Prettier 검사를 통과했다.
-- 인증/API·DB·자료함/검색/읽기 디자인은 변경하지 않았다. 실제 Google 계정 재로그인, 전체 자료 CRUD 브라우저 검사와 HTTPS 이미지 재빌드는 이번 시각 변경에서 실행하지 않았다. 개발 DB migration·commit·push·배포는 하지 않았다.
-
-#### Phase 1 자료함 디자인·로그인 문구 정리 — 2026-09-20
-
-- 자료함을 제목·최근 수정일 목록과 `새 자료` 진입 중심으로 변경했다. 작성 패널은 필요할 때 펼치며 같은 화면에서 접었다 열어도 입력·오류·멱등 요청 ID를 유지한다. 닫기/Escape 뒤 진입 버튼 focus 복귀, 저장 중 닫기 방지, 기존 저장·페이지 이동을 유지했다.
-- 고운바탕 제목·공통 Wordmark와 종이색 인증 헤더를 적용하고 폰트 정의·팔레트를 실제 소비자끼리 공유했다. 로그인에서 사용자가 지정한 소개·안내 네 문구를 제거했다. 인증·API·DB와 검색·원문 읽기 본문은 바꾸지 않았다. 적용 계약은 spec/ADR-0006에 반영했으며 README에 작업 기록을 추가하지 않았다.
-- `ref:V-10`: 320/768/1280px의 빈 화면·목록·작성 패널과 로그인 스크린샷을 확인했다. 패널 재진입 후 응답 유실 재시도의 입력·요청 ID 보존, 목록 오류 복구와 기존 로그인·검색·수정·삭제를 포함한 브라우저 35개 및 production HTTPS 이미지 여정 1개를 통과했다. 첫 검사에서 발견한 버튼 disabled 전환 중 대비 문제를 전환 효과 제거로 수정했고, 오류 assertion은 자료 목록 영역으로 한정한 뒤 전체 재검증했다.
-- web build·web typecheck·테스트 TypeScript, 변경 파일 ESLint/Prettier와 전체 dependency-cruiser 검사를 통과했다. 별도 단위/DB 통합 suite·실제 Google 계정 수동 재로그인은 재실행하지 않았다. 개발 DB migration·commit/push·배포는 하지 않았다.
-
-#### Phase 1 검색 계산 비용·공통 경계 보완 — 2026-09-20
-
-- 승인된 범위에서 stored `tsvector`와 `0009` migration을 추가했다. Repository의 FTS 조건·rank만 저장 컬럼으로 전환하고 LIKE·similarity·점수 정렬·owner/current/deleted·OFFSET 계약을 유지했다. 과거 migration은 그대로이며 schema와 `0009` snapshot의 차이는 새 컬럼·GIN 하나뿐이다. 기존 데이터 upgrade·생성 컬럼·index 교체는 격리 DB에서 확인했고 Kit 재생성은 추가 변경 없음으로 끝났다.
-- 동일 검색 fixture의 변경 전/후 27조건·각 실행 360표본을 비교했다. 모든 조건에서 저장 vector와 기존 표현식 SQL의 반환 행·순서가 같았다. 20k `인증` p50은 238.02→23.54ms, `공통기록`은 376.77→290.47ms였다. 흔한 단어·이력 증가 비용은 남아 있으며 projection·후보 제한·점수 변경은 도입하지 않았다. raw 표본과 계획은 로컬 test-results, 공개 요약·재현 명령과 한계는 ADR-0009에 기록했다.
-- snippet은 전체 grapheme 배열을 제거하고 필요한 경계를 이분 탐색한다. 전각·결합 문자·한글 자모·이모지·소문자 길이 확장을 보존했다. 별도 24조건 측정에서 모두 p50이 감소했으며 10k 한글 본문 끝 매칭 50건은 45.00→10.42ms였다. 매 경계마다 prefix를 변환하는 선형 순회나 NFKC만 확인하는 fast path는 넣지 않았다.
-- 생성 후 검색 cache 누락을 staleTime=Infinity인 실제 QueryClient로 재현한 뒤 owner별 목록·검색 갱신을 공유했다. 수정의 상세 invalidate와 삭제의 remove는 그대로다. 기존 TanStack Query 버전을 루트 테스트에서도 사용하므로 catalog로 단일화했다. 생성·수정 폼 오류를 좁게 공유하고 pending fieldset 해제 뒤 첫 오류 필드에 focus하도록 수정했다.
-- GlobalExceptionFilter를 `http/filters/`로 이동하고 typed mapping과 dependency-cruiser의 common→feature/composition·feature→HTTP composition 금지를 적용했다. 앱 조립 필터의 공개 feature 오류 의존은 의도적으로 유지한다고 ADR-0002/0007에 기록했다. auth 만료 정리는 파일 내부 배치 상수만 공유하며 앵커 복귀·페이지네이션은 바꾸지 않았다.
-- 검증: `pnpm build`, `pnpm typecheck`, ESLint·Prettier·dependency-cruiser 통과. Vitest 단위·HTTP 63개, PostgreSQL 통합 81개, 자료 여정 Playwright 18개 통과. 첫 브라우저 실행에서 발견한 누락 import와 disabled 입력 focus 문제를 수정한 뒤 같은 전체 대상 18개를 다시 통과했다. HTTP 검사 최초 sandbox 포트 제한도 승인된 실행에서 재검증했다.
-- 이번 변경에서 전체 인증 브라우저 suite·HTTPS 이미지 재빌드·실제 Google 로그인·OpenAPI 재생성은 실행하지 않았다. HTTP/SDK 계약과 이미지 설정은 변경하지 않았고 관련 HTTP·DB·제품 브라우저 여정으로 검증했다. 개발 DB migration·commit·push는 하지 않았다. 적용 시 API 중지→대상 확인 후 `pnpm db:migrate`→새 API 시작이 필요하다. AGENTS의 새 경계 문구는 파일 검사만 했으며 새 Codex/Claude 세션의 지침 로딩은 확인하지 않았다.
-
-#### Phase 1 프론트 복구·검증 정리 — 2026-09-20
-
-- logout의 sign-out gate를 CSRF bootstrap 앞으로 옮겼다. 진행 중 발급은 공유하고 다른 mutation은 발급·전송 전에 거부한다. 실패한 logout은 다시 시도할 수 있으며 기존 refresh 완료 대기와 성공 뒤 차단은 유지한다. transport 회귀 3건의 실패를 확인한 뒤 수정했다.
-- 문서 background 재조회의 일시 장애에는 본문·편집 초안을 유지하고 stale 경고·재시도를 표시한다. 400·403·404에는 이전 본문을 숨긴다. 삭제 충돌 복구는 cached data가 아니라 `isSuccess`를 확인하며 실패 시 dialog를 유지한다. 검색 도움말 연결·재시도 진행 안내·화면 순서상 첫 서버 오류 focus도 정리했다.
-- 정상 OAuth 거부와 장애 로그를 구분했다. returnTo의 허용 경로·앵커는 바꾸지 않고 encoded 검색 문자 정책을 명시·검증했다. 인증·자료 barrier 실패 시 시작한 요청을 모두 정리하며, refresh cleanup의 locked-row 보존과 DB teardown의 단계별 정리를 보강했다. CI에서 ignored next-env 파일의 무효한 diff 인자를 제거했다.
-- 검증: `pnpm build`, `pnpm typecheck` 통과. ESLint·Prettier 검사·dependency-cruiser 통과. Vitest 단위·HTTP 66개, 관련 PostgreSQL 통합 72개(auth 44·material-changes 12·database 16), Playwright 전체 41개, 격리 HTTPS 이미지 1개 통과. 문서 stale 320px 스크린샷과 axe 검사도 확인했다. HTTP 검사의 sandbox 포트 제한은 권한 승인 후 같은 검사로 재실행했다. 검색 재시도 테스트는 data 없는 Query가 pending으로 돌아가는 실제 상태에 맞춰 진행 안내를 검사한다.
-- 이번 변경은 API 응답·schema·검색 계약을 바꾸지 않는다. OpenAPI 재생성·검색 benchmark는 재실행하지 않았고 개발 DB migration·실제 Google 계정 로그인·커밋·push는 수행하지 않았다. 실제 Google 교환은 격리 fixture로 검증했다.
-
-#### Phase 1 변경 없는 저장 — 2026-09-21
-
-- 수정 요청은 receipt 재전송 확인·자료 행 잠금·소유자/삭제 상태·기대 revision 검증 뒤 현재 내용 fingerprint를 비교한다. 정규화한 내용이 같으면 기존 ID/revision을 반환하고 새 요청의 receipt만 기록한다. current pointer·updated_at·revision/chunk/keyword/intent는 변경하지 않는다. 실제 오타·공백·메모 변경은 기존처럼 새 revision을 만든다.
-- 오래된 기대 버전의 새 요청은 내용이 현재와 같아도 409다. 이미 확정된 변경 없음 요청의 재전송은 이후 자료가 수정되어도 원래 결과를 유지하며 같은 key의 다른 내용은 거부한다. API 응답 형태·schema·migration은 변경하지 않았다.
-- 검증: 수정 전 변경 없음·동시 재전송 검사 2건의 실패를 확인했고 실제 변경 검사 1건은 통과했다. 수정 후 실제 PostgreSQL 자료 통합 28개, 자료 브라우저 여정 17개, 본문 규칙 단위 2개 통과. API·테스트 TypeScript 검사, ESLint·Prettier·dependency-cruiser·diff 공백 검사 통과. 변경 문서의 로컬 링크 대상도 확인했다.
-- worker·AI 재처리 감소는 아래 Phase 2 계획에만 반영했다. 이번 작업에서는 AI 호출·개발 DB migration·OpenAPI 재생성·전체 인증/HTTPS 이미지 재검증·commit/push를 수행하지 않았다. 응답 형태와 인증·이미지 구성은 변경하지 않았다.
-
-#### Phase 1 커밋 전 정리 — 2026-09-21
-
-- 생성 OpenAPI 명세를 `apps/api/openapi.json`으로 옮기고 생성기·SDK 입력·drift 검사·포맷 제외 경로를 함께 변경했다. API가 명세를 소유하며 `docs/`는 요구사항·설계·작업 문서로 유지한다. 재생성한 명세와 SDK 내용은 이동 전과 동일하다.
-- 현재 작업 트리에서 `pnpm openapi:check`, `pnpm typecheck`, `pnpm build`, `pnpm lint` 통과. 단위·HTTP 66개, 격리 PostgreSQL 통합 88개, 브라우저 전체 42개 통과. 공개 Markdown의 로컬 링크 대상 119개와 diff 공백 검사를 확인했다.
-- 이번 경로 정리에서 HTTPS 이미지 검증·검색 benchmark·실제 Google 로그인은 재실행하지 않았다. 앞선 검증 기록과 구분하며 개발 DB migration·외부 AI 호출·배포·push는 수행하지 않는다.
-
 ### Phase 2 — AI 도입 gate, embedding과 hybrid 검색
 
-**불필요한 임베딩 재처리 감소**는 이 phase의 입력·worker 설계에 포함한다. Phase 1의 변경 없는 저장은 새 intent 자체를 만들지 않는다. 실제 내용이 바뀐 revision은 보존하되, 어떤 필드·전처리·chunk 구성을 provider 입력으로 쓰는지 먼저 확정하고 동일 입력 결과의 재사용을 설계한다. 재사용 식별에는 실제 입력과 provider/model/version/dimension·입력 처리 설정을 포함하며 material 전체 fingerprint나 "사소한 수정" 여부만으로 판단하지 않는다. 같은 owner의 허용된 결과 범위부터 검토하고 새 revision/chunk 연결·현재 revision·삭제·consent/config/lease fence를 유지한다. 입력·설정 불일치와 철회/삭제 결과의 재사용 금지, 재사용 시 provider 0-call을 검증한다. 글로벌 cache·계정 간 공유·query 원문 보존을 선행 추가하지 않는다. 이 항목은 설계·구현 예정이며 이번 Phase 1 보완에서 worker·AI 호출·vector 재사용은 구현하지 않는다.
+#### 구현 순서와 현재 승인 범위
+
+| 순서 | 작업 단위 | 현재 범위 |
+| --- | --- | --- |
+| 0 | embedding 입력·work 단위·공유 코드·transaction 경계 확정 | 결정 기록 있음 |
+| 1 | 전체 DB 패키지 승격, Redis/BullMQ 전달, worker 원자 claim | 구현·검증 기록 있음 |
+| 2 | 동의·예산·명시적 활성화와 work 생성의 동일 transaction | 기반 검증 기록 있음, 무료 정책·기존 화면 연결 승인 |
+| 3 | attempt·retry·lease 만료·repair·철회/삭제 fence | provider-free slice 구현·검증 완료 |
+| 4 | provider 승인·vector schema·fenced publication·동일 chunk 결과 재사용 | Gemini Free 승인 범위 구현·검증 완료 |
+| 5 | query embedding·hybrid 검색·기존 화면 연결 | 구현·통합·브라우저 검증 완료 |
+| 6 | 삭제·철회 정리와 Phase 2 종료 검증 | 최소 중복 방지 기록 보존·bounded 정리·종료 검사 완료 |
+
+0단계 결정: 임베딩 입력은 immutable chunk 본문 text다. 제목·메모·맥락·출처는 keyword 대상이며 embedding 입력에는 포함하지 않는다. 작업은 revision/config/consent/generation 단위로 조율하고 실제 provider attempt·비용 노출은 별도로 기록한다. 본문 처리 버전과 provider/model/version/dimension이 포함된 동일 입력 결과만 같은 owner의 유효한 범위에서 재사용한다.
+
+1단계 구현: `packages/db`에 전체 schema·migration·Kit·연결 팩토리를 모으고 `packages/queue`에 work ID 전달 계약을 둔다. API indexing은 lazy producer, worker indexing은 consumer와 PG claim을 소유한다. 당시 work 생성·자동 enqueue는 연결하지 않았다. claim 메시지의 완료는 LEASED 전이 결과일 뿐 AI 성공이 아니며, LEASED 이후 실행·만료 복구는 다음 단계다. 구현·검증 범위는 [0~1단계 기록](plans/2026-09-21-phase2-foundation.md)을 따른다. Phase 2 전체 완료를 뜻하지 않는다.
+
+2단계 당시 구현 범위: owner-scoped preview(최대 20건·cursor), 명시적 동의·철회, 공유 기간 예산의 정수 비용 예약, 멱등 활성화 receipt와 work 생성을 연결했다. 같은 DB transaction에서 current revision·동의 epoch·설정을 확인하고 commit 뒤 Redis로 전달한다. 당시에는 승인 설정이 없어 제품 활성화를 거부하고 합성 설정으로만 검증했다. 파일과 당시 검증은 [2단계 기록](plans/2026-09-22-phase2-activation.md)을 따르며 현재 정책·화면 범위는 후속 승인 기록을 따른다.
+
+3단계 당시 승인 범위는 provider 없는 실행 시도·실패 분류·최대 5회 retry, LEASED/CALLING 만료 복구와 bounded repair였다. worker의 공개 Service가 같은 named CLS transaction에 참여하고 STARTED·예약 노출을 원자적으로 기록한다. 당시 consumer는 claim-only였으며 `0012`는 vector·provider·정산·명시 재시도·화면을 포함하지 않았다. [3단계 기록](plans/2026-09-22-phase2-recovery.md#실행-결과)은 당시 검증 근거이고 현재 제품 범위는 아니다. 4~6단계에서는 무료 429를 자동 retry에서 제외하고 게시·비용 정산 및 화면까지 연결한다.
+
+4~6단계의 세부 수용 기준과 실제 검사 결과는 [마무리 기록](plans/2026-09-30-phase2-provider-gate.md#phase-2-마무리--2026-10-01-후속-승인)에 모은다. 현재 선택 자료와 활성화 이후 새 저장·수정만 자동 처리하며, 과거 미선택 자료·terminal work를 자동 재실행하지 않는다. semantic 검색은 명시적 POST 한 번으로 상위 50개를 제공하고, 90일 상세 이력을 정리한 뒤에도 최소 terminal work 식별자를 남겨 중복 호출을 막는다.
+
+기반 단계와 이후 공통 책임 정리의 실행 결과는 [0~1단계 기록](plans/2026-09-21-phase2-foundation.md)과 [2단계 후속 기록](plans/2026-09-22-phase2-activation.md#동시기-후속-정리-기록)에 보존한다.
+
+**불필요한 임베딩 재처리 감소**는 이 phase의 입력·worker 설계에 포함한다. Phase 1의 변경 없는 저장은 새 intent 자체를 만들지 않는다. 실제 내용이 바뀐 revision은 보존하되, 어떤 필드·전처리·chunk 구성을 provider 입력으로 쓰는지 먼저 확정하고 동일 입력 결과의 재사용을 설계한다. 재사용 식별에는 실제 입력과 provider/model/version/dimension·입력 처리 설정을 포함하며 material 전체 fingerprint나 "사소한 수정" 여부만으로 판단하지 않는다. 같은 owner의 허용된 결과 범위부터 검토하고 새 revision/chunk 연결·현재 revision·삭제·consent/config/lease fence를 유지한다. 입력·설정 불일치와 철회/삭제 결과의 재사용 금지, 재사용 시 provider 0-call을 검증한다. 글로벌 cache·계정 간 공유·query 원문 보존을 선행 추가하지 않는다. 입력 경계 결정은 0단계에 기록했고 실제 결과 재사용은 4단계의 후속 구현 범위다.
 
 외부 호출 없는 immutable intent와 queue·state-machine slice를 먼저 만든다. Phase 0·1에서 AI 설정 없이 저장한 현재 revision intent도 보존하되 indexing work를 만들거나 Phase 1을 막지 않는다. 첫 실제 chunk 또는 검색 질의 embedding 호출 전에 provider/model/version/dimension, 단위 가격과 호출별 최대 비용, provider retention/private-data 조건을 품질·privacy·비용 evidence로 비교해 별도 승인하고 exact configuration fingerprint를 고정한다. 같은 gate에서 `embedding` purpose의 명시적 consent, budget reservation/settlement, 철회와 provider 0-call negative를 먼저 검증한다.
 
-그 뒤 기존 `/library` 또는 `/search` 안에 의미 검색 활성화·현재 자료 재시도 동작을 추가하고 `apps/worker`, Redis/BullMQ, lease/retry/final state, repair와 fenced PostgreSQL publication을 연결한다. 활성화는 current revision·config·consent epoch·budget을 확인하고, AI 설정 전에 저장한 intent 또는 재동의된 intent에 새 indexing work를 bounded batch로 만든다. terminal work는 변경하지 않으며 activation idempotency와 active-work unique constraint로 반복 요청의 중복을 막는다. 새 settings/운영 화면이나 범용 재색인 시스템은 만들지 않는다.
+그 뒤 기존 `/library` 또는 `/search` 안에 의미 검색 활성화·현재 자료 재시도 동작을 추가하고 1단계의 worker/큐 기반에 lease/retry/final state, repair와 fenced PostgreSQL publication을 연결한다. 활성화는 current revision·config·consent epoch·budget을 확인하고, AI 설정 전에 저장한 intent 또는 재동의된 intent에 새 indexing work를 bounded batch로 만든다. terminal work는 변경하지 않으며 activation idempotency와 active-work unique constraint로 반복 요청의 중복을 막는다. 새 settings/운영 화면이나 범용 재색인 시스템은 만들지 않는다.
 
-이 단계에서 로컬 `docker-compose.yml`에 Redis를 추가한다. 평소 API와 worker는 호스트의 별도 pnpm·Turbo 개발 프로세스로 실행하고, worker Dockerfile과 `app` profile의 worker 서비스도 추가해 빌드된 이미지 기동을 확인한다. consumer·processor·scheduler는 worker에서만 등록하고 공유 backend Module을 사용하는 API에서는 시작하지 않는다. Redis가 시작부터 없거나 실행 중 중단되어도 API 기동과 core 경로는 유지되어야 한다. 자동화된 큐·경쟁 테스트는 개발 Redis나 PostgreSQL을 재사용하지 않고 Testcontainers로 격리한다.
+0~1단계에서 로컬 `docker-compose.yml`의 Redis와 worker Dockerfile·`app` profile을 도입했다. 평소 API와 worker는 호스트의 별도 pnpm·Turbo 개발 프로세스로 실행하고 이미지 기동은 격리 검사로 확인한다. consumer·processor·scheduler는 worker에서만 등록하고 공유 backend Module을 사용하는 API에서는 시작하지 않는다. Redis가 시작부터 없거나 실행 중 중단되어도 API 기동과 core 경로는 유지되어야 한다. 자동화된 큐·경쟁 테스트는 개발 Redis나 PostgreSQL을 재사용하지 않고 Testcontainers로 격리한다.
 
 문서 chunk embedding과 검색 질의 embedding 모두 같은 consent/budget/provider gate를 통과한다. 질의 원문은 필요한 호출에만 transient하게 전송하고 durable usage/telemetry에는 저장하지 않는다. vector/hybrid는 준비된 현재 revision만 사용하며 query embedding 실패·미동의·예산 차단은 설명 가능한 keyword fallback으로 끝난다.
 
@@ -175,7 +128,7 @@ Gate: `ref:AC-06`, `ref:AC-07`, `ref:AC-08`을 `ref:V-07`, `ref:V-08`로 통과�
 
 ### Phase 4 — 화면 완결과 접근성·보안 hardening
 
-세 화면의 empty/loading/error/conflict/degraded/recovery와 답변 lifecycle을 완결한다. [`../DESIGN.md`](../DESIGN.md)의 hierarchy를 Inter와 devfootnote semantic token으로 적용하되 금지 brand asset을 포함하지 않는다. keyboard/focus return, label/error association, ARIA announcement, reduced motion, 44×44 touch, tablet navigation collapse와 mobile single-column을 실기기 크기에서 닫는다. JWT expiry·refresh/logout 복구, CSRF, A/B owner isolation과 retention cleanup을 함께 harden한다.
+세 화면의 empty/loading/error/conflict/degraded/recovery와 답변 lifecycle을 완결한다. [`../DESIGN.md`](../DESIGN.md)의 hierarchy를 ADR-0006의 화면별 글꼴·브랜드와 devfootnote semantic token으로 적용하되 금지 brand asset을 포함하지 않는다. keyboard/focus return, label/error association, ARIA announcement, reduced motion, 44×44 touch, tablet navigation collapse와 mobile single-column을 실기기 크기에서 닫는다. JWT expiry·refresh/logout 복구, CSRF, A/B owner isolation과 retention cleanup을 함께 harden한다.
 
 Gate: `ref:AC-01`, `ref:AC-02`, `ref:AC-07`, `ref:AC-10`을 `ref:V-02`, `ref:V-03`, `ref:V-08`, `ref:V-10`, `ref:V-12`로 통과한다.
 
@@ -191,18 +144,9 @@ Gate: `ref:AC-09`, `ref:AC-12`를 `ref:V-09`, `ref:V-11`, `ref:V-12`로 통과�
 
 ### Phase 6 — AWS 비용·Terraform 결정 gate
 
-제품 구현과 Phase 5 evidence가 모두 끝난 뒤에만 후보 A(단일 저비용 Graviton EC2+storage/backup), B(EC2 app/worker/Redis+managed PostgreSQL), C(Fargate+managed PostgreSQL+managed cache)를 같은 workload로 비교한다. 이 phase를 여는 별도 승인 전에는 region, SKU, topology 또는 IaC를 선택·생성하지 않는다.
+제품 구현과 Phase 5 evidence가 모두 끝난 뒤에만 ADR-0010에 따라 최소 세 후보 A/B/C를 같은 workload로 비교한다. A/B/C는 식별자일 뿐이며 실제 service·배치 조합은 그때 정한다. 이 phase를 여는 별도 승인 전에는 region, SKU, topology 또는 IaC를 선택·생성하지 않는다.
 
-각 후보는 official price URL과 조회 timestamp/timezone, region, 활성 사용자·동시성을 포함한 peak/steady workload, 730시간을 고정하고 compute, DB, cache, storage/IO, backup, IPv4, ECR/registry, logs, DNS, load balancer, NAT와 transfer를 수량×단가로 기록한다. 모든 사용자의 AI 최대 비용을 합산하며 월 30,000원은 서비스 전체 상한이다. Credit/free tier는 지속 비용에서 차감하지 않는다. FX source/lookback의 최고 환율, 적용 세금과 보수적 올림을 기록한다.
-
-```text
-usdSubtotal     = Σ(USD line-item quantity × unit price)
-preCreditKRW    = ceil((ceil(usdSubtotal × fxRate) + krwItems) × taxMultiplier)
-finalTotalKRW   = ceil(preCreditKRW × 1.20)
-costGate        = finalTotalKRW > 30000 ? BLOCK : PASS_COST_ONLY
-```
-
-`taxMultiplier`는 `1.10`, 또는 적용되지 않는 법적 근거를 기록한 `1.00`이다. 두 검토자가 같은 입력으로 같은 결과를 얻어야 한다. 비용 equality는 비용 조건만 통과하며 peak-memory margin, restore rehearsal와 별도 배포 승인은 여전히 필요하다. 비용·복구 gate를 통과해도 Terraform apply, cloud resource 생성 또는 deployment를 자동 승인하지 않는다.
+후보별 workload·공식 가격·환율·세금·여유분과 서비스 전체 월 30,000원 상한의 계산식은 ADR-0010을 따른다. 이 문서에서 별도 계산식·가격 가정을 재정의하지 않는다. 두 검토자의 재계산 일치, 비용·용량·복구 조건 통과 뒤에도 배포 승인은 별도로 필요하다.
 
 Gate: `ref:AC-13`을 `ref:V-13`으로 통과한 뒤 별도 승인에서만 ADR-0010의 deferred decision을 갱신한다.
 
@@ -221,11 +165,11 @@ Gate: `ref:AC-13`을 `ref:V-13`으로 통과한 뒤 별도 승인에서만 ADR-0
 | `V-07` | fake provider와 실제 DB가 `REQUESTED → RESERVED → RUNNING → terminal` 전이, call-attempt 시작 기록, provider-outside-transaction, 호출 전 crash의 무비용 release와 호출 시작 후 결과 불명의 보수 정산을 구분해 검증한다. 응답 저장 뒤 HTTP 유실 재요청은 같은 owner/request/fingerprint에 저장 결과를 반환하고 추가 호출·charge가 0건이며 다른 fingerprint는 충돌한다. 재조회 revision/delete/consent/expiry fence, exact citation, no-answer, timeout/429/malformed output과 분리된 answer/dedupe TTL도 검증한다. | PostgreSQL integration, controllable crash barriers, connection observation, provider call ledger |
 | `V-08` | consent default-off, budget/policy negative, revoke/delete/revision/expiry races와 duplicate result에서 금지된 새 provider call·answer publish·double settlement가 0건인지 검증한다. publication 차단과 비용 exposure 정산은 독립 decision table대로 exactly-once 처리되고 AI 파생 자료는 즉시 inaccessible·24시간 내 deleted여야 한다. | call/settlement ledger, DB-clock race matrix, retention evidence |
 | `V-09` | ADR의 package/feature graph를 최종 허용 상한으로 사용하고 각 phase의 node·edge가 그 부분집합인지 검사한다. 공개 Nest Module·명명된 업무 Service 메서드는 허용하되 cycle, frontend→backend runtime, feature deep import, cross-private repository/schema, 공개 경계를 우회하는 rule/schema 접근과 generic bypass coordinator는 거부한다. API에서 consumer·scheduler가 기동되지 않고 PostgreSQL-down readiness 실패와 Redis/AI 없이 API 기동·core 지속이 구별되어야 한다. 최소 Turbo task·cache 정책, `docker-compose.yml`의 단계별 서비스·healthcheck·loopback 연결, 호스트 개발 및 `app` profile의 image build/runtime smoke, same-origin HTTPS 인증, 재시작 후 데이터 보존과 worker 종료·복구를 현재 phase 범위에서 확인한다. 후속 공유 패키지는 실제 consumer와 owner를 확인하고 허용 graph를 갱신한다. | phase-aware dependency graph test, API/worker integration probes, task graph 확인, 로컬·CI image build/smoke와 데이터 보존·종료 기록; 세부 검증은 ADR-0001/0009 |
-| `V-10` | token/contrast automation과 세 화면 browser matrix가 Inter, semantic/non-color cue, `ink-faint` 제한, AA contrast, labels/names/errors/announcements, keyboard/focus return, reduced motion, 44×44, tablet/mobile reflow 및 금지 identity/asset 0건을 검증한다. | static token report, accessibility assertions, Playwright screenshots/interaction |
+| `V-10` | ADR-0006의 화면별 글꼴·브랜드·semantic token을 실제 브라우저에서 검증한다. 사용하는 색 조합의 AA contrast, non-color cue, `ink-faint` 제한, labels/names/errors/announcements, keyboard/focus return, reduced motion, 44×44, tablet/mobile reflow 및 금지 identity/asset 0건을 확인한다. 별도 토큰 수식 보고서를 필수 산출물로 요구하지 않는다. | 접근성 assertions, Playwright/axe, screenshots/interaction |
 | `V-11` | versioned 20-case development와 frozen 40-case final corpus가 Hit@1/5, multi-evidence recall, grounded/valid/false-answer ratio를 재현하고, 별도 1k/10k run이 latency/cost/resource 조건과 한 변수 비교를 기록한다. | corpus hash, raw result artifact, evaluation report |
 | `V-12` | redaction fixtures와 cleanup/restore rehearsal이 content·prompt·answer·provider response·secret·token·source query의 telemetry 0건, bounded pseudonym label, retention deadlines와 recovery를 검증한다. | log/trace/metric scan, DB retention receipts, restore report |
 | `V-13` | 두 검토자가 모든 사용자의 workload·AI 최대 비용을 합산한 동일 official-price worksheet를 독립 재계산해 동일 `finalTotalKRW`/gate를 얻으며 누락 line, stale/unknown source, 월 서비스 전체 30,000 KRW 초과, memory margin 부족 또는 restore 실패를 각각 BLOCK한다. | signed input snapshot, two recomputation outputs, ADR-0010 gate receipt |
-| `V-14` | canonical inventory/parser가 devfootnote-only content, exact ten ADR links, 단일 F/AC/V/NG declaration, typed forward/reverse references, owner consistency와 dangling link 0건을 확인하고 docs cutover의 Git/product/test/IaC/cloud action 0건을 증명한다. | document graph report and scoped file-action receipt |
+| `V-14` | [역사적 문서 전환 전용] canonical inventory/parser가 devfootnote-only content, exact ten ADR links, 단일 F/AC/V/NG declaration, typed forward/reverse references, owner consistency와 dangling link 0건을 확인하고 docs cutover의 Git/product/test/IaC/cloud action 0건을 증명한다. | document graph report and scoped file-action receipt |
 
 ## 5. Acceptance 추적 매트릭스
 
